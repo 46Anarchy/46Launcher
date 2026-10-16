@@ -220,10 +220,22 @@ fn main() {
     emit_launcher_git_hash();
     minify_frontend_for_release();
     emit_build_identity();
-    tauri_build::try_build(
-        tauri_build::Attributes::new().config_path("../../src-tauri/tauri.conf.json"),
-    )
-    .expect("tauri build script failed")
+    // Only the final binary (harness) crate may run tauri_build's Windows
+    // resource embedding: this library crate has no bins, so its own
+    // `resource.lib` falls back to `rustc-link-lib` (which propagates
+    // transitively), while the harness links its own copy too — link.exe
+    // then fails with CVT1100 duplicate resource (type:VERSION) → LNK1123.
+    // Skipped on Windows targets via the TARGET triple (correct even when
+    // cross-compiling); Linux/macOS behavior is unchanged.
+    // `generate_context!` keeps working without it: it reads the config
+    // file directly, capabilities resolve from `src-tauri/capabilities/`,
+    // and the target triple falls back to host (correct on native builds).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        tauri_build::try_build(
+            tauri_build::Attributes::new().config_path("../../src-tauri/tauri.conf.json"),
+        )
+        .expect("tauri build script failed")
+    }
 }
 
 #[cfg(not(feature = "tauri-backend"))]
