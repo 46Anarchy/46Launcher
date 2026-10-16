@@ -98,32 +98,32 @@ jobs:
           # Detailed notes for THIS release (v0.1.0): filenames carry the
           # version — update names + highlights on every version bump.
           releaseBody: |
-            First public release of the 46Anarchy native launcher — Paladium 1.7.10 Modpack V11 with Microsoft login and one-click play.
+            Première version publique du launcher natif 46Anarchy — Modpack Paladium 1.7.10 avec connexion Microsoft et jeu en un clic.
 
-            ## Download the right file
+            ## Télécharger le bon fichier
 
-            **Linux** — baseline runs on any 64-bit CPU, `-v3` is optimized for AVX2 CPUs (Intel Haswell / AMD Excavator and newer, ~2013+). Easiest path picks for you:
+            **Linux** — la version de base tourne sur n'importe quel CPU 64 bits, `-v3` est optimisée pour les CPU AVX2 (Intel Haswell / AMD Excavator et plus récents, ~2013+). Le plus simple choisit pour vous :
             ```
             curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash
             ```
-            Or grab it manually: `46Anarchy_0.1.0_amd64.AppImage` (portable, just run it), `46Anarchy_0.1.0_amd64-v3.AppImage`, `46Anarchy_0.1.0_amd64.deb` (+ `-v3` twin), `46Anarchy-0.1.0-1.x86_64.rpm` (+ `-v3` twin).
+            Ou en manuel : `46Anarchy_0.1.0_amd64.AppImage` (portable, il suffit de le lancer), `46Anarchy_0.1.0_amd64-v3.AppImage`, `46Anarchy_0.1.0_amd64.deb` (+ jumeau `-v3`), `46Anarchy-0.1.0-1.x86_64.rpm` (+ jumeau `-v3`).
 
-            **Windows** — `46Anarchy_0.1.0_x64-setup.exe` (installer) or `46Anarchy_0.1.0_x64_en-US.msi`.
-            **macOS (Apple Silicon)** — `46Anarchy_0.1.0_aarch64.dmg`: drag into `/Applications`. Unsigned build: right-click → Open on first launch. No Intel Mac build in this release.
+            **Windows** — `46Anarchy_0.1.0_x64-setup.exe` (installeur) ou `46Anarchy_0.1.0_x64_en-US.msi`.
+            **macOS (Apple Silicon)** — `46Anarchy_0.1.0_aarch64.dmg` : glisser dans `/Applications`. Build non signé : clic droit → Ouvrir au premier lancement. Pas de build Mac Intel dans cette version.
 
-            No Java to install — the launcher provisions its own runtime automatically. You need a Microsoft account that owns Minecraft: Java Edition.
+            Pas de Java à installer — le launcher provisionne son propre runtime automatiquement. Il vous faut un compte Microsoft possédant Minecraft: Java Edition.
 
-            ## What's inside
+            ## Contenu
 
-            - Microsoft device-code login, sessions in the OS keyring, multi-account switcher
-            - Manifest install/verify with live per-file progress, mod manager, optional Loki
-            - Live game console, crash reports naming the cause, server status, repo patch notes
-            - Experimental modernized branch (Java 21): shipped but temporarily gated, back later
+            - Connexion Microsoft (device-code), sessions dans le trousseau système, multi-comptes
+            - Installation/vérification par manifeste avec progression par fichier, gestionnaire de mods, Loki optionnel
+            - Console du jeu en direct, rapports de plantage avec la cause, statut serveur, notes de patch des dépôts
+            - Branche expérimentale modernisée (Java 21) : incluse mais temporairement désactivée, de retour plus tard
 
             ## Notes
 
-            - First boot restores your session silently; Linux may ask to unlock the keyring once.
-            - Issues and feedback: https://github.com/46Anarchy/46Launcher/issues
+            - Le premier démarrage restaure votre session silencieusement ; Linux peut demander le déverrouillage du trousseau une fois.
+            - Problèmes et retours : https://github.com/46Anarchy/46Launcher/issues
           releaseDraft: true
           prerelease: false
           args: --bundles ${{ matrix.bundles }}
