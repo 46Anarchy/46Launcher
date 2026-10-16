@@ -328,11 +328,12 @@ fn select_commit_notes(fresh: Vec<PatchNoteDto>, stale: Vec<PatchNoteDto>) -> Ve
     }
 }
 
-static COMMIT_NOTES_CACHE: std::sync::OnceLock<
-    std::sync::Mutex<Option<(std::time::Instant, Vec<PatchNoteDto>)>>,
-> = std::sync::OnceLock::new();
+type CommitNotesCacheEntry = Option<(std::time::Instant, Vec<PatchNoteDto>)>;
+type CommitNotesCache = std::sync::OnceLock<std::sync::Mutex<CommitNotesCacheEntry>>;
 
-fn commit_cache() -> &'static std::sync::Mutex<Option<(std::time::Instant, Vec<PatchNoteDto>)>> {
+static COMMIT_NOTES_CACHE: CommitNotesCache = std::sync::OnceLock::new();
+
+fn commit_cache() -> &'static std::sync::Mutex<CommitNotesCacheEntry> {
     COMMIT_NOTES_CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
