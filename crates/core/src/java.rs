@@ -971,7 +971,7 @@ mod tests {
         // keep the is_java8/major consistency invariant in both cases.
         let dir = tempfile::tempdir().unwrap();
         let status = java8_status(dir.path());
-        if status.path == PathBuf::from("java") {
+        if status.path.as_os_str() == "java" {
             // Fallback: nothing to check beyond consistency below.
         } else {
             assert!(
