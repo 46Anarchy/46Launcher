@@ -964,10 +964,25 @@ mod tests {
 
     #[test]
     fn java8_status_probes_resolved_binary_without_network() {
-        // Empty temp dir: resolves to bare "java" (PATH probe, best effort).
+        // Empty temp dir, no network: resolves either to bare "java" (PATH
+        // probe, best effort — machines without a system JDK) or to a real
+        // absolute java binary (e.g. CI runners shipping Temurin under
+        // /usr/lib/jvm). Both are valid resolutions; assert the shape, and
+        // keep the is_java8/major consistency invariant in both cases.
         let dir = tempfile::tempdir().unwrap();
         let status = java8_status(dir.path());
-        assert_eq!(status.path, PathBuf::from("java"));
+        if status.path == PathBuf::from("java") {
+            // Fallback: nothing to check beyond consistency below.
+        } else {
+            assert!(
+                status
+                    .path
+                    .file_name()
+                    .is_some_and(|n| n == "java" || n == "java.exe"),
+                "resolved java must be a java binary: {}",
+                status.path.display()
+            );
+        }
         assert_eq!(status.is_java8, status.major == Some(8));
     }
 }
