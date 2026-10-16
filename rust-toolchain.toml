@@ -1,0 +1,7 @@
+# Pin the exact toolchain validated locally (1.99.0): CI (dtolnay action
+# with no version input) reads this file, so local == CI and fmt/clippy
+# can never drift apart again. Bump deliberately, then re-verify green.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
