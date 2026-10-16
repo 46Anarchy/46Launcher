@@ -7340,6 +7340,16 @@ mod tests {
             .expect("spawn enfant réussi");
         let pid = enfant.id();
         assert_ne!(pid, 0);
+        // L'enfant vient de naître : sur une machine chargée (CI 2 cœurs),
+        // /proc/<pid>/cmdline peut être vide le temps de l'exec — réessayer
+        // avec échéance au lieu d'exiger une visibilité immédiate.
+        let debut = std::time::Instant::now();
+        while !game_process_running(Some(pid), &game) {
+            if debut.elapsed() > std::time::Duration::from_secs(10) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
         assert!(
             game_process_running(Some(pid), &game),
             "un enfant vivant marqué doit passer pour le jeu (pid {pid})"
