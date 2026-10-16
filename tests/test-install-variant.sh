@@ -94,6 +94,42 @@ out="$(ARCH_VARIANT=auto FAKE_MACHINE=x86_64 PROC_CPUINFO="$TMP/does-not-exist" 
 assert_contains "$out" "Microarch variant: baseline" "missing cpuinfo selects baseline"
 assert_contains "$out" "no CPU flags readable" "missing cpuinfo reason shown"
 
+# --- distro format matrix (atomic desktops -> AppImage) -----------------------
+# NOTE: every case pins OSTREE_BOOTED at a missing path, except the marker
+# case — otherwise this host's real /run/ostree-booted would force AppImage.
+make_os_release() {
+    printf 'ID=%s\nID_LIKE=%s\n' "$2" "$3" > "$1"
+}
+
+for spec in \
+    "bazzite|bazzite|fedora" \
+    "silverblue|silverblue|fedora" \
+    "aurora|aurora|fedora" \
+    "aeon|aeon|suse opensuse" \
+    "microos|opensuse-microos|suse opensuse" \
+    "steamos|steamos|arch" \
+    "vanilla|vanilla|ubuntu debian" \
+; do
+    name="${spec%%|*}"; rest="${spec#*|}"; id="${rest%%|*}"; like="${rest#*|}"
+    make_os_release "$TMP/$name.os" "$id" "$like"
+    out="$(ARCH_VARIANT=auto FAKE_MACHINE=x86_64 PROC_CPUINFO="$TMP/full.cpu" OS_RELEASE="$TMP/$name.os" OSTREE_BOOTED="$TMP/no-marker" bash "$INSTALL_SH" --dry-run)"
+    assert_contains "$out" "Selected format: .AppImage" "atomic $name selects AppImage"
+done
+
+# ostree marker wins even over a native-packaging ID (Ubuntu + marker).
+touch "$TMP/ostree-marker"
+make_os_release "$TMP/ubuntu.os" "ubuntu" "debian"
+out="$(ARCH_VARIANT=auto FAKE_MACHINE=x86_64 PROC_CPUINFO="$TMP/full.cpu" OS_RELEASE="$TMP/ubuntu.os" OSTREE_BOOTED="$TMP/ostree-marker" bash "$INSTALL_SH" --dry-run)"
+assert_contains "$out" "Selected format: .AppImage" "ostree marker forces AppImage on ubuntu"
+assert_contains "$out" "ostree" "ostree reason shown"
+
+# natives still resolve without marker or atomic IDs (regression guards).
+make_os_release "$TMP/fedora.os" "fedora" ""
+out="$(ARCH_VARIANT=auto FAKE_MACHINE=x86_64 PROC_CPUINFO="$TMP/full.cpu" OS_RELEASE="$TMP/fedora.os" OSTREE_BOOTED="$TMP/no-marker" bash "$INSTALL_SH" --dry-run)"
+assert_contains "$out" "Selected format: .rpm" "plain fedora still selects rpm"
+out="$(ARCH_VARIANT=auto FAKE_MACHINE=x86_64 PROC_CPUINFO="$TMP/full.cpu" OS_RELEASE="$TMP/ubuntu.os" OSTREE_BOOTED="$TMP/no-marker" bash "$INSTALL_SH" --dry-run)"
+assert_contains "$out" "Selected format: .deb" "plain ubuntu still selects deb"
+
 # --- pick_asset_url units ----------------------------------------------------
 JSON_BOTH='{"assets": [
   {"browser_download_url": "https://example.com/46Anarchy_0.1.0_amd64.deb"},

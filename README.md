@@ -34,6 +34,12 @@ GitHub release, and installs the matching bundle. Only `curl` is required
 | Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux | `.rpm` | `dnf install` (fallback `rpm -Uvh`) |
 | Arch, Manjaro, Garuda, EndeavourOS, openSUSE, anything else | `.AppImage` | copied to `~/.local/bin/46anarchy.AppImage` with a desktop entry and icon, no root needed |
 
+Immutable/atomic desktops (Bazzite, Aurora, Bluefin, Silverblue, Kinoite,
+openSUSE Aeon/MicroOS, Vanilla OS, SteamOS, … — detected via the ostree
+marker or distro ID) always get the `.AppImage`: layering native packages
+with `dnf`/`rpm-ostree` is the wrong tool there (reboot-required, and the
+AppImage needs no root at all).
+
 Preview without changing anything:
 
 ```sh

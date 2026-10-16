@@ -26,6 +26,8 @@
 # Test hooks (not for normal use):
 #   PROC_CPUINFO     cpuinfo source, default "/proc/cpuinfo".
 #   FAKE_MACHINE     overrides `uname -m`.
+#   OSTREE_BOOTED    ostree marker path, default "/run/ostree-booted".
+#   OS_RELEASE       os-release source, default "/etc/os-release".
 #   INSTALL_SH_LIB=1 source this file for its functions only (no install).
 #
 # Dependencies: only `curl` (+ `sudo` when not running as root).
@@ -46,6 +48,10 @@ ICON_BRANCH="master"
 ARCH_VARIANT="${ARCH_VARIANT:-auto}"
 # cpuinfo source (overridable for tests).
 PROC_CPUINFO="${PROC_CPUINFO:-/proc/cpuinfo}"
+# os-release source (overridable for tests).
+OS_RELEASE="${OS_RELEASE:-/etc/os-release}"
+# ostree-booted marker (overridable for tests): present == immutable system.
+OSTREE_BOOTED="${OSTREE_BOOTED:-/run/ostree-booted}"
 # x86-64-v3 ISA gate: AVX/AVX2/BMI1-2/FMA/LZCNT/MOVBE/OSXSAVE
 # (~2013+ CPUs: Intel Haswell+, AMD Excavator / Zen+ and newer).
 V3_REQUIRED_FLAGS="avx avx2 bmi1 bmi2 fma lzcnt movbe osxsave"
@@ -111,11 +117,32 @@ detect_format() {
     os_like=""
     FORMAT="appimage"
     reason="no /etc/os-release match (or file missing), using portable fallback"
-    if [ -r /etc/os-release ]; then
+    if [ -r "$OS_RELEASE" ]; then
         # shellcheck disable=SC1091
-        os_id="$(grep -m 1 -E '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
-        os_like="$(grep -m 1 -E '^ID_LIKE=' /etc/os-release | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+        os_id="$(grep -m 1 -E '^ID=' "$OS_RELEASE" | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+        os_like="$(grep -m 1 -E '^ID_LIKE=' "$OS_RELEASE" | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
     fi
+
+    # Immutable/atomic desktops must never get native packages (no dnf/apt
+    # layering — reboot-required and wrong tool for the job): ostree-booted
+    # marker first (covers every current/future atomic spin regardless of
+    # ID), then an explicit ID list for spins without the marker handy.
+    # shellcheck disable=SC2086
+    if [ -e "$OSTREE_BOOTED" ]; then
+        FORMAT="appimage"
+        reason="immutable ostree system ($OSTREE_BOOTED present), using portable AppImage"
+        return
+    fi
+    case " $os_id " in
+        *" bazzite "*|*" aurora "*|*" bluefin "*|*" ucore "*|*" silverblue "*|\
+*" kinoite "*|*" sericea "*|*" onyx "*|*" microos "*|*" aeon "*|*" kalpa "*|\
+*" vanilla "*|*" blendos "*|*" endless "*|*" endlessos "*|*" steamos "*|\
+*" nitrux "*)
+            FORMAT="appimage"
+            reason="immutable/atomic desktop '$os_id', using portable AppImage"
+            return
+            ;;
+    esac
 
     # shellcheck disable=SC2086
     for token in $os_id $os_like; do
