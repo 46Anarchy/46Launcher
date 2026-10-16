@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# launcher-core: pure game-file logic for the 46Anarchy launcher.
+# No UI code here; auth/ui crates consume the public API re-exported from lib.rs.
+
+[package]
+name = "launcher-core"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Pure manifest/integrity/download/instance logic for the 46Anarchy launcher"
+authors = ["46Anarchy"]
+homepage = "https://46anarchy.fr"
+repository = "https://github.com/46anarchy/46anarchy-launcher"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+tokio = { version = "1", features = ["full"] }
+sha1 = "0.10"
+thiserror = "2"
+directories = "6"
+futures-util = "0.3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+flate2 = "1"
+tar = "0.4"
+sysinfo = "0.30"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }

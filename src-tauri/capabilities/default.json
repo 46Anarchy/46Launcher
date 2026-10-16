@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-capability",
+  "description": "Permissions par défaut du launcher 46Anarchy.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

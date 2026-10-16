@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# 46Anarchy native Minecraft launcher — workspace root (top-level binary).
+
+[package]
+name = "launcher"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "46Anarchy native Minecraft launcher (top-level binary; game logic lives in launcher-core)"
+authors = ["46Anarchy"]
+homepage = "https://46anarchy.fr"
+repository = "https://github.com/46anarchy/46anarchy-launcher"
+# Icons: `src-tauri/icons/` holds the generated set (`cargo tauri icon`);
+# the root-package `assets/icon.png` hook below stays for a future
+# cargo-deb-only flow (Tauri bundles use `src-tauri/icons/` instead).
+keywords = ["minecraft", "launcher", "game"]
+categories = ["games"]
+
+[[bin]]
+name = "launcher"
+path = "src/main.rs"
+
+[workspace]
+members = ["crates/core", "crates/auth", "crates/ui"]
+# `src-tauri` is the Tauri CLI harness (own package: needs system WebKit +
+# tauri-cli); excluded so plain `cargo build` / `cargo test` stay portable.
+exclude = ["src-tauri"]
+resolver = "2"
+
+[dependencies]
+launcher-core = { path = "crates/core" }
+launcher-ui = { path = "crates/ui" }
+tokio = { version = "1", features = ["full"] }
+
+# Minimal packaging stubs (ignored by plain `cargo build`/`cargo test`).
+# Fill in `assets/icon.png` + maintainer details when cutting .deb / release
+# archives with cargo-deb / cargo-dist.
+[package.metadata.deb]
+maintainer = "46Anarchy"
+copyright = "2026, 46Anarchy"
+section = "games"
+priority = "optional"
+depends = "ca-certificates"
+
+[package.metadata.dist]
+# cargo-dist: no installers enabled yet (add "shell"/"powershell" or
+# "deb" targets here once release artifacts are defined).
+installers = []

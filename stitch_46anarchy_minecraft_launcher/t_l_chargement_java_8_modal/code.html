@@ -1,0 +1,287 @@
+<!DOCTYPE html><html class="dark" lang="fr" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta content="desktop_launcher" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; background-color: #0e0e0e; color: #FFFFFF; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #131313; }
+    ::-webkit-scrollbar-thumb { background: #262626; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #353535; }
+    * { -webkit-user-select: none; user-select: none; }
+</style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-obsidian": "#0A0A0C",
+            "surface-card": "#18181A",
+            "surface-elevated": "#222226",
+            "surface-container-low": "#1c1b1b",
+            "surface-container-lowest": "#0e0e0e",
+            "surface": "#131313",
+            "text-primary": "#FFFFFF",
+            "text-secondary": "#A1A1AA",
+            "text-muted": "#8A8A93",
+            "border-subtle": "#2B2B30",
+            "border-focus": "#FF5C00",
+            "primary": "#FF5C00",
+            "primary-hover": "#FF6E1A",
+            "status-online": "#00E575"
+          },
+          fontFamily: {
+            display: ["Montserrat", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            grotesk: ["Space Grotesk", "sans-serif"],
+            body: ["Montserrat", "sans-serif"]
+          }
+        }
+      }
+    };
+</script>
+</head>
+<body class="text-text-primary font-body min-h-screen select-none antialiased flex flex-col justify-between h-screen overflow-hidden bg-surface relative">
+<!-- TOP TITLEBAR & HEADER (Native Desktop Shell) -->
+<header class="top-0 left-0 right-0 h-12 z-40 flex items-center justify-between border-b border-border-subtle backdrop-blur-md px-4 shrink-0 select-none bg-surface-container-lowest">
+<!-- Left Brand & Server Stats -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2" style="-webkit-app-region: no-drag;">
+<div class="w-2.5 h-2.5 rounded-xs bg-primary rotate-45 shadow-[0_0_8px_rgba(255,92,0,0.6)]"></div>
+<span class="font-display font-bold text-xs tracking-wider text-text-primary uppercase">46ANARCHY LAUNCHER <span class="text-text-muted font-normal">• 1.7.10 V8</span></span>
+</div>
+<div class="h-3.5 w-px bg-border-subtle mx-1"></div>
+<div class="flex items-center gap-4 text-xs font-mono" style="-webkit-app-region: no-drag;">
+<div class="flex items-center gap-1.5 text-text-secondary">
+<span class="w-2 h-2 rounded-full bg-status-online inline-block shadow-[0_0_6px_rgba(0,229,117,0.7)]"></span>
+<span class="text-text-primary font-semibold">1 420</span>
+<span class="text-text-muted text-[11px]">Joueurs</span>
+</div>
+<div class="flex items-center gap-1 text-text-muted text-[11px]">
+<span class="">ping</span>
+<span class="text-text-secondary font-medium">18 ms</span>
+</div>
+</div>
+</div>
+<!-- Right: Social Links, User Profile & Native Controls -->
+<div class="flex items-center gap-4" style="-webkit-app-region: no-drag;">
+<div class="flex items-center gap-3 text-xs text-text-muted font-mono">
+<a class="hover:text-text-primary transition-colors flex items-center gap-1.5" href="https://46anarchy.fr/" target="_blank">
+<span class="material-symbols-outlined text-[15px]">globe</span>
+<span class="hidden md:inline">46anarchy.fr</span>
+</a>
+<a class="hover:text-text-primary transition-colors flex items-center gap-1.5" href="https://discord.gg/" target="_blank">
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07f 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"></path></svg>
+<span class="hidden md:inline">Discord</span>
+</a>
+</div>
+<!-- User Badge -->
+<div class="flex items-center gap-2 pl-2 border-l border-border-subtle">
+<div class="w-6 h-6 rounded bg-surface-elevated border border-border-subtle flex items-center justify-center text-primary text-xs">
+<span class="material-symbols-outlined text-[15px]">person</span>
+</div>
+<span class="font-mono text-xs font-semibold text-text-primary">Herobrine_46</span>
+</div>
+<!-- Window Controls -->
+<div class="flex items-center gap-1 ml-1">
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-text-primary hover:bg-surface-elevated rounded transition-colors" title="Réduire" type="button">—</button>
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-text-primary hover:bg-surface-elevated rounded transition-colors" title="Agrandir" type="button">□</button>
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-white hover:bg-red-600/90 rounded transition-colors" title="Fermer" type="button">✕</button>
+</div>
+</div>
+</header>
+<!-- MAIN BODY (Sidebar + Viewport Background) -->
+<div class="flex flex-1 overflow-hidden relative">
+<!-- PERSISTENT LEFT SIDEBAR -->
+<aside class="w-60 bg-surface-container-low border-r border-border-subtle flex flex-col justify-between p-4 shrink-0 select-none">
+<div class="space-y-4">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-text-muted font-grotesk font-semibold mb-3 px-2">Navigation Client</p>
+<nav class="space-y-1">
+<!-- Accueil -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">home</span>
+<span class="font-grotesk">Accueil</span>
+</div>
+</a>
+<!-- Mods -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">deployed_code</span>
+<span class="font-grotesk">Mods</span>
+</div>
+
+</a>
+<!-- Configuration Java / JVM (Active) -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-elevated border border-primary/30 text-text-primary font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-primary">memory</span>
+<span class="font-grotesk font-semibold text-white">Configuration Java</span>
+</div>
+
+</a>
+<!-- Comptes -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">manage_accounts</span>
+<span class="font-grotesk">Comptes</span>
+</div>
+
+</a>
+<!-- Logs Console -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">terminal</span>
+<span class="font-grotesk">Console</span>
+</div>
+
+</a>
+</nav>
+</div>
+</div>
+<!-- Bottom RAM Monitor Card -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-3.5 space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-grotesk uppercase tracking-wider text-text-muted font-bold">RAM Allouée</span>
+<span class="text-xs font-mono font-bold text-text-primary">4 096 MB</span>
+</div>
+<div class="w-full h-1.5 bg-surface-elevated rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 50%;"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-text-muted">
+<span class="">Java 8 Update 51 (x64)</span>
+<span class="text-status-online">Opti</span>
+</div>
+</div>
+</aside>
+<!-- BACKGROUND CONTENT (Dimmed & Blurred underneath modal) -->
+<main class="flex-1 overflow-hidden p-6 md:p-8 space-y-6 bg-surface opacity-30 pointer-events-none filter blur-[1px]">
+<!-- Hero Banner Mock -->
+<div class="relative rounded-2xl overflow-hidden border border-border-subtle bg-gradient-to-r from-surface-card via-surface-elevated to-surface-card p-7">
+<div class="space-y-2 max-w-xl">
+<div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+          v1.4.0 ANARCHY MODDÉ
+        </div>
+<h1 class="text-3xl font-display font-extrabold tracking-tight text-white">46ANARCHY 1.7.10</h1>
+<p class="text-xs text-text-secondary leading-relaxed">Serveur Anarchy PvP sans règles avec minerais légendaires et machines exclusives.</p>
+</div>
+</div>
+<!-- Launch bar mock -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-5 space-y-4">
+<div class="flex items-center justify-between">
+<span class="font-grotesk font-bold text-sm text-text-primary">Client Prêt v1.4.0</span>
+<div class="px-7 py-2.5 rounded-xl bg-primary text-white font-grotesk font-bold text-sm">JOUER</div>
+</div>
+</div>
+</main>
+<!-- DARKENED BACKDROP OVERLAY & CENTERED JAVA 8 DOWNLOAD MODAL -->
+<div class="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+<div class="bg-surface-card border border-border-subtle w-full max-w-[540px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.04)] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+<!-- Modal Header -->
+<div class="px-6 pt-6 pb-4 flex items-start justify-between border-b border-border-subtle/70 bg-surface-container-lowest/50">
+<div class="flex items-start gap-3.5">
+<div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center shrink-0 shadow-[0_0_14px_rgba(255,92,0,0.2)]">
+<span class="material-symbols-outlined text-primary text-[22px]">downloading</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<h2 class="font-display text-base md:text-[17px] leading-tight text-white font-bold tracking-tight">Téléchargement du Runtime Java 8</h2>
+<span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-primary/10 border border-primary/20 text-primary">v8u412</span>
+</div>
+<p class="font-mono text-xs text-text-muted leading-relaxed">
+              Adoptium Temurin OpenJDK 8u412-b08 (x64) requis pour 46Anarchy 1.7.10
+            </p>
+</div>
+</div>
+<button class="text-text-muted hover:text-white transition-colors p-1.5 rounded-lg hover:bg-surface-elevated -mr-1 -mt-1 cursor-pointer flex items-center justify-center" title="Fermer" type="button">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Modal Body -->
+<div class="p-6 flex flex-col gap-5">
+<!-- Progress Bar & Speed Section -->
+<div class="bg-surface-elevated/70 border border-border-subtle/80 rounded-xl p-4.5 space-y-3">
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-grotesk font-semibold text-text-primary">Temurin-8u412-jre-x64.tar.gz</span>
+</div>
+<span class="font-mono font-bold text-primary tabular-nums text-sm">68%</span>
+</div>
+<!-- Orange Glowing Progress Bar -->
+<div class="w-full h-2.5 rounded-full bg-surface-container-lowest overflow-hidden p-0.5 border border-white/[0.04]">
+<div class="h-full bg-gradient-to-r from-primary to-[#ff7a29] rounded-full transition-all duration-300 relative shadow-[0_0_14px_rgba(255,92,0,0.7)]" style="width: 68%;">
+<div class="absolute inset-0 bg-white/20 animate-[pulse_1.5s_infinite]"></div>
+</div>
+</div>
+<!-- Download Metrics -->
+<div class="flex items-center justify-between font-mono text-[11px] text-text-muted tabular-nums pt-0.5">
+<span class="text-text-secondary"><span class="text-white font-medium">124 Mo</span> / 182 Mo</span>
+<div class="flex items-center gap-3">
+<span class="text-primary font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">speed</span>
+                ~14.2 Mo/s
+              </span>
+<span class="text-text-secondary">Temps restant : <span class="text-white font-semibold">4s</span></span>
+</div>
+</div>
+</div>
+<!-- Technical Details & Verification Box -->
+<div class="bg-surface-container-lowest/80 border border-border-subtle rounded-xl p-3.5 space-y-2.5 font-mono text-xs">
+<!-- Check 1: Integrity Hash -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-text-secondary">
+<span class="material-symbols-outlined text-status-online text-[15px]">verified</span>
+<span class="text-[11px]">Contrôle d'intégrité SHA-256</span>
+</div>
+<span class="text-[10px] text-status-online font-semibold bg-status-online/10 px-1.5 py-0.5 rounded border border-status-online/20">Signature Validée</span>
+</div>
+<!-- Destination Path -->
+<div class="space-y-1 pt-1 border-t border-border-subtle/50">
+<span class="text-[10px] text-text-muted uppercase tracking-wider block font-grotesk font-semibold">Répertoire d'installation :</span>
+<div class="bg-surface-elevated/90 px-2.5 py-1.5 rounded-lg border border-border-subtle/60 text-[11px] text-text-secondary truncate select-all flex items-center gap-2">
+<span class="material-symbols-outlined text-text-muted text-[14px] shrink-0">folder</span>
+<span class="truncate">C:\Users\User\AppData\Local\46Anarchy\runtime\java-8</span>
+</div>
+</div>
+<!-- Auto-extraction Notice -->
+<div class="flex items-center gap-2 text-[11px] text-text-muted pt-1">
+<span class="material-symbols-outlined text-primary text-[14px]">auto_mode</span>
+<span class="">Extraction automatique et injection des arguments JVM au lancement.</span>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="px-6 py-4 bg-surface-container-lowest/70 border-t border-border-subtle flex items-center justify-between">
+<div class="flex items-center gap-2">
+<button class="px-3.5 py-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-colors font-mono text-xs cursor-pointer" type="button">
+            Arrière-plan
+          </button>
+</div>
+<div class="flex items-center gap-2.5">
+<button class="px-4 py-2 rounded-xl text-text-secondary hover:text-white hover:bg-surface-elevated border border-border-subtle transition-colors font-mono text-xs font-medium cursor-pointer" type="button">
+            Annuler
+          </button>
+<button class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-primary/20 text-primary border border-primary/40 font-grotesk text-xs font-bold shadow-[0_0_12px_rgba(255,92,0,0.2)] cursor-not-allowed" disabled="" type="button">
+<span class="material-symbols-outlined text-[16px] animate-spin">sync</span>
+<span class="">Installation en cours...</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- BOTTOM TAURI STATUS BAR -->
+
+
+
+</body></html>

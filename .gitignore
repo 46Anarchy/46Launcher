@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Rust build outputs (workspace root, Tauri harness, anywhere nested).
+# The workspace target/ alone is ~15GB — never commit it.
+target/
+
+# Tauri bundler workdir (Windows installer toolchain, downloaded on demand).
+src-tauri/WixTools/
+
+# Tauri installer/bundle artifacts (produced by `cargo tauri build`,
+# attached to draft GitHub Releases — never committed).
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.dmg
+
+# Personal tooling state: Serena cache, memories and project-local config.
+.serena/
+
+# Logs, temp files, backups.
+*.log
+*.tmp
+*.bak
+*~
+
+# OS droppings.
+.DS_Store
+Thumbs.db
+
+# IDE dirs.
+.vscode/
+.idea/

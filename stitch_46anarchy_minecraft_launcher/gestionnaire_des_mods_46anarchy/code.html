@@ -1,0 +1,552 @@
+<!DOCTYPE html><html class="dark" lang="fr" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta content="desktop_launcher" name="shell-type">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #131313; }
+    ::-webkit-scrollbar-thumb { background: #262626; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #353535; }
+    * { -webkit-user-select: none; user-select: none; }
+</style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-obsidian": "#0A0A0C",
+            "surface-card": "#18181A",
+            "surface-elevated": "#222226",
+            "surface-container-low": "#1c1b1b",
+            "surface-container-lowest": "#0e0e0e",
+            "surface": "#131313",
+            "text-primary": "#FFFFFF",
+            "text-secondary": "#A1A1AA",
+            "text-muted": "#8A8A93",
+            "border-subtle": "#2B2B30",
+            "border-focus": "#FF5C00",
+            "primary": "#FF5C00",
+            "primary-hover": "#FF6E1A",
+            "status-online": "#00E575",
+            "status-alert": "#FF334B"
+          },
+          fontFamily: {
+            display: ["Montserrat", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"],
+            grotesk: ["Space Grotesk", "sans-serif"],
+            body: ["Montserrat", "sans-serif"]
+          }
+        }
+      }
+    };
+</script>
+</head>
+<body class="text-text-primary font-body min-h-screen select-none antialiased flex flex-col h-screen overflow-hidden bg-surface">
+<!-- TOP TITLEBAR & HEADER (Native Desktop Shell - Identical to Screen 3) -->
+<header class="top-0 left-0 right-0 h-12 z-50 flex items-center justify-between border-b border-border-subtle backdrop-blur-md px-4 shrink-0 select-none bg-surface-container-lowest">
+<!-- Left Brand & Server Stats -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2" style="-webkit-app-region: no-drag;">
+<div class="w-2.5 h-2.5 rounded-xs bg-primary rotate-45 shadow-[0_0_8px_rgba(255,92,0,0.6)]"></div>
+<span class="font-display font-bold text-xs tracking-wider text-text-primary uppercase">46ANARCHY LAUNCHER <span class="text-text-muted font-normal">• 1.7.10 V8</span></span>
+</div>
+<div class="h-3.5 w-px bg-border-subtle mx-1"></div>
+<div class="flex items-center gap-4 text-xs font-mono" style="-webkit-app-region: no-drag;">
+<div class="flex items-center gap-1.5 text-text-secondary">
+<span class="w-2 h-2 rounded-full bg-status-online inline-block shadow-[0_0_6px_rgba(0,229,117,0.7)]"></span>
+<span class="text-text-primary font-semibold">1 420</span>
+<span class="text-text-muted text-[11px]">Joueurs</span>
+</div>
+<div class="flex items-center gap-1 text-text-muted text-[11px]">
+<span class="">ping</span>
+<span class="text-text-secondary font-medium">18 ms</span>
+</div>
+</div>
+</div>
+<!-- Right: Social Links, User Profile & Native Controls -->
+<div class="flex items-center gap-4" style="-webkit-app-region: no-drag;">
+<div class="flex items-center gap-3 text-xs text-text-muted font-mono">
+<a class="hover:text-text-primary transition-colors flex items-center gap-1.5" href="https://46anarchy.fr/" target="_blank">
+<span class="material-symbols-outlined text-[15px]">globe</span>
+<span class="hidden md:inline">46anarchy.fr</span>
+</a>
+<a class="hover:text-text-primary transition-colors flex items-center gap-1.5" href="https://discord.gg/" target="_blank">
+<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"></path></svg>
+<span class="hidden md:inline">Discord</span>
+</a>
+</div>
+<!-- User Badge -->
+<div class="flex items-center gap-2 pl-2 border-l border-border-subtle">
+<div class="w-6 h-6 rounded bg-surface-elevated border border-border-subtle flex items-center justify-center text-primary text-xs">
+<span class="material-symbols-outlined text-[15px]">person</span>
+</div>
+<span class="font-mono text-xs font-semibold text-text-primary">Herobrine_46</span>
+</div>
+<!-- Window Controls -->
+<div class="flex items-center gap-1 ml-1">
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-text-primary hover:bg-surface-elevated rounded transition-colors" title="Réduire" type="button">—</button>
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-text-primary hover:bg-surface-elevated rounded transition-colors" title="Agrandir" type="button">□</button>
+<button class="w-7 h-6 flex items-center justify-center font-mono text-xs text-text-muted hover:text-white hover:bg-red-600/90 rounded transition-colors" title="Fermer" type="button">✕</button>
+</div>
+</div>
+</header>
+<!-- MAIN BODY (Sidebar + Viewport) -->
+<div class="flex flex-1 overflow-hidden">
+<!-- PERSISTENT LEFT SIDEBAR (Mods tab Active) -->
+<aside class="w-60 bg-surface-container-low border-r border-border-subtle flex flex-col justify-between p-4 shrink-0">
+<div class="space-y-4">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-text-muted font-grotesk font-semibold mb-3 px-2">Navigation Client</p>
+<nav class="space-y-1">
+<!-- Accueil -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">home</span>
+<span class="font-grotesk">Accueil</span>
+</div>
+</a>
+<!-- Mods (Active) -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-elevated border border-primary/30 text-text-primary font-medium text-xs group transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-primary">deployed_code</span>
+<span class="font-grotesk font-semibold">Mods</span>
+</div>
+
+</a>
+<!-- Configuration Java / JVM -->
+<a class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors text-left" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">memory</span>
+<span class="font-grotesk">Configuration Java</span>
+</div>
+
+</a>
+<!-- Comptes -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">manage_accounts</span>
+<span class="font-grotesk">Comptes</span>
+</div>
+
+</a>
+<!-- Logs Console -->
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60 font-medium text-xs transition-colors" href="#">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-text-muted">terminal</span>
+<span class="font-grotesk">Console</span>
+</div>
+
+</a>
+</nav>
+</div>
+</div>
+<!-- Bottom RAM Monitor Card -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-3.5 space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-grotesk uppercase tracking-wider text-text-muted font-bold">RAM Allouée</span>
+<span class="text-xs font-mono font-bold text-text-primary">4 096 MB</span>
+</div>
+<div class="w-full h-1.5 bg-surface-elevated rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 50%;"></div>
+</div>
+<div class="flex items-center justify-between text-[10px] font-mono text-text-muted">
+<span class="">Java 8 Update 51 (x64)</span>
+<span class="text-status-online">Opti</span>
+</div>
+</div>
+</aside>
+<!-- MAIN VIEWPORT CONTENT (Mods Manager) -->
+<main class="flex-1 overflow-y-auto p-6 md:p-8 space-y-5 bg-surface flex flex-col min-w-0">
+<!-- Header Section: Title & Actions -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+<div>
+<div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold mb-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_5px_#ff5c00]"></span>
+          MODPACK 1.7.10 FORGE
+        </div>
+<h1 class="text-2xl md:text-3xl font-display font-extrabold tracking-tight text-white">Gestionnaire des Mods</h1>
+<p class="text-xs font-mono text-text-secondary mt-0.5">42 mods installés pour 46Anarchy 1.7.10 Forge</p>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<button class="px-4 py-2.5 rounded-xl border border-border-subtle hover:border-text-muted bg-surface-card hover:bg-surface-elevated text-text-secondary hover:text-text-primary text-xs font-mono font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm" id="btn-open-folder" type="button">
+<span class="material-symbols-outlined text-[17px] text-primary">folder_open</span>
+<span class="">Ouvrir le dossier des mods</span>
+</button>
+</div>
+</div>
+<!-- Search & Filter Controls Card -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-3 md:p-3.5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+<!-- Filter Pills -->
+<div class="flex items-center gap-1.5 flex-wrap" id="filter-pills">
+<button class="filter-tab active px-3 py-1.5 rounded-lg bg-surface-elevated border border-primary/40 text-text-primary font-grotesk font-semibold text-xs transition-colors flex items-center gap-1.5" data-filter="all">
+<span class="">Tous</span>
+<span class="font-mono text-[10px] text-primary font-bold">42</span>
+</button>
+<button class="filter-tab px-3 py-1.5 rounded-lg bg-transparent border border-transparent hover:bg-surface-elevated text-text-muted hover:text-text-primary font-grotesk font-medium text-xs transition-colors flex items-center gap-1.5" data-filter="required">
+<span class="">Obligatoires</span>
+<span class="font-mono text-[10px] text-text-secondary">8</span>
+</button>
+<button class="filter-tab px-3 py-1.5 rounded-lg bg-transparent border border-transparent hover:bg-surface-elevated text-text-muted hover:text-text-primary font-grotesk font-medium text-xs transition-colors flex items-center gap-1.5" data-filter="optional">
+<span class="">Optionnels</span>
+<span class="font-mono text-[10px] text-text-secondary">34</span>
+</button>
+<button class="filter-tab px-3 py-1.5 rounded-lg bg-transparent border border-transparent hover:bg-surface-elevated text-text-muted hover:text-text-primary font-grotesk font-medium text-xs transition-colors flex items-center gap-1.5" data-filter="disabled">
+<span class="">Désactivés</span>
+<span class="font-mono text-[10px] text-text-muted">0</span>
+</button>
+</div>
+<!-- Search Bar -->
+<div class="relative w-full md:w-72">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-[17px]">search</span>
+<input class="w-full bg-surface-container-lowest border border-border-subtle hover:border-text-muted/60 focus:border-primary focus:bg-surface-elevated text-text-primary placeholder:text-text-muted font-mono text-xs pl-9 pr-14 py-2 rounded-lg focus:outline-none transition-all" id="mod-search" placeholder="Rechercher un mod..." type="text">
+<span class="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-text-muted pointer-events-none" id="search-count">42 mods</span>
+</div>
+</div>
+<!-- Mods Table Container -->
+<div class="bg-surface-card border border-border-subtle rounded-xl shadow-lg flex-1 flex flex-col min-h-0 overflow-hidden">
+<!-- Table Header -->
+<div class="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border-subtle bg-surface-container-lowest font-mono text-[10px] text-text-muted uppercase tracking-wider font-semibold shrink-0">
+<div class="col-span-12 md:col-span-6">Nom du mod &amp; Description</div>
+<div class="hidden md:block md:col-span-2">Version</div>
+<div class="hidden md:block md:col-span-2 text-right">Taille</div>
+<div class="col-span-12 md:col-span-2 text-right pr-2">Statut</div>
+</div>
+<!-- Scrollable List of Mods -->
+<div class="flex-1 overflow-y-auto divide-y divide-border-subtle/50" id="mods-container">
+<!-- Mod 1: Anarchy Core (Required) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="required" data-name="46anarchy-core-1.7.10.jar core Anarchy">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-primary/30 flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">46anarchy-core-1.7.10.jar</div>
+<div class="text-[11px] text-text-muted truncate">Moteur multijoueur Anarchy, anti-cheat &amp; minerais personnalisés</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">v1.4.0-b3</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">14.8 Mo</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold" title="Requis par le serveur de jeu">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+            Obligatoire
+          </span>
+</div>
+</div>
+<!-- Mod 2: Forge Core API (Required) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="required" data-name="Forge-10.13.4.1614.jar core api">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-primary/30 flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[18px]">construction</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">Forge-10.13.4.1614.jar</div>
+<div class="text-[11px] text-text-muted truncate">Modloader Minecraft Forge pour client 1.7.10</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">10.13.4.1614</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">4.2 Mo</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold" title="Requis par le serveur de jeu">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+            Obligatoire
+          </span>
+</div>
+</div>
+<!-- Mod 3: bspkrsCore (Required) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="required" data-name="bspkrsCore-v6.16.jar core">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-primary/30 flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[18px]">memory</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">bspkrsCore-v6.16.jar</div>
+<div class="text-[11px] text-text-muted truncate">Bibliothèque requise pour ArmorStatusHUD et DirectionHUD</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">v6.16</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">192 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold" title="Requis par le serveur de jeu">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+            Obligatoire
+          </span>
+</div>
+</div>
+<!-- Mod 4: CustomMainMenu (Required) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="required" data-name="CustomMainMenu-MC1.7.10-1.9.2.jar menu interface">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-primary/30 flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[18px]">desktop_windows</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">CustomMainMenu-1.9.2.jar</div>
+<div class="text-[11px] text-text-muted truncate">Écran d'accueil synchronisé officiel 46Anarchy</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">1.9.2</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">174 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/30 text-primary font-mono text-[11px] font-semibold" title="Requis par le serveur de jeu">
+<span class="material-symbols-outlined text-[13px]">lock</span>
+            Obligatoire
+          </span>
+</div>
+</div>
+<!-- Mod 5: FastCraft (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="FastCraft-1.25.jar optim fps performance">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">speed</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">FastCraft-1.25.jar</div>
+<div class="text-[11px] text-text-muted truncate">Optimisation drastique du calcul FPS et rendu des chunks</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">1.25</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">224 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 6: OptiFine (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="OptiFine_1.7.10_HD_U_E7.jar shaders zoom graphique">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">OptiFine_1.7.10_HD_U_E7.jar</div>
+<div class="text-[11px] text-text-muted truncate">Support Shaders, zoom optique C, textures dynamiques HD</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">HD U E7</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">2.4 Mo</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 7: NotEnoughItems (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="NotEnoughItems-1.7.10-1.0.5.jar nei recettes crafts">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">menu_book</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">NotEnoughItems-1.0.5.jar</div>
+<div class="text-[11px] text-text-muted truncate">Visualisation des recettes de craft (Touche R / U)</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">1.0.5</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">512 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 8: DamageIndicators (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="DamageIndicatorsMod-3.2.3.jar vie pv pvp">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">favorite</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">DamageIndicatorsMod-3.2.3.jar</div>
+<div class="text-[11px] text-text-muted truncate">Affichage dynamique des PV des monstres et adversaires PvP</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">3.2.3</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">1.1 Mo</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 9: ArmorStatusHUD (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="ArmorStatusHUD-1.28.jar armure hud pvp">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">shield</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">ArmorStatusHUD-1.28.jar</div>
+<div class="text-[11px] text-text-muted truncate">Affichage de la durabilité de l'armure et outils équipés</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">1.28</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">36 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 10: MouseTweaks (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="MouseTweaks-2.4.4.jar inventaire souris">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">mouse</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">MouseTweaks-2.4.4.jar</div>
+<div class="text-[11px] text-text-muted truncate">Glisser-déposer et tri accéléré d'items dans l'inventaire</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">2.4.4</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">62 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+<!-- Mod 11: InventoryTweaks (Optional - Enabled) -->
+<div class="mod-item px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-surface-elevated/50 transition-colors" data-category="optional" data-name="InventoryTweaks-1.59-dev.jar tri inventaire coffres">
+<div class="col-span-8 md:col-span-6 flex items-center gap-3 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-surface-elevated border border-border-subtle flex items-center justify-center text-text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">inventory_2</span>
+</div>
+<div class="min-w-0">
+<div class="font-mono text-xs font-semibold text-text-primary truncate">InventoryTweaks-1.59-dev.jar</div>
+<div class="text-[11px] text-text-muted truncate">Tri automatique des coffres et remplacement d'outils brisés (R)</div>
+</div>
+</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-secondary">1.59</div>
+<div class="hidden md:block md:col-span-2 font-mono text-xs text-text-muted text-right">198 Ko</div>
+<div class="col-span-4 md:col-span-2 flex items-center justify-end pr-2">
+<button class="mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary" data-state="on" title="Désactiver le mod" type="button">
+<span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BOTTOM TAURI STATUS BAR (Exact match to Screen 3) -->
+
+<!-- Subtle Toast Notification -->
+<div class="fixed bottom-10 right-6 bg-surface-card border border-border-subtle text-text-primary px-3.5 py-2 rounded-xl shadow-2xl flex items-center gap-2.5 translate-y-12 opacity-0 pointer-events-none transition-all duration-200 z-50 text-xs font-mono" id="toast-tauri">
+<span class="material-symbols-outlined text-primary text-[17px]">info</span>
+<span class="" id="toast-text">Action exécutée</span>
+</div>
+<script>
+  (function () {
+    const searchInput = document.getElementById('mod-search');
+    const searchCount = document.getElementById('search-count');
+    const modItems = document.querySelectorAll('.mod-item');
+    const toast = document.getElementById('toast-tauri');
+    const toastText = document.getElementById('toast-text');
+    const openFolderBtn = document.getElementById('btn-open-folder');
+    const filterTabs = document.querySelectorAll('.filter-tab');
+
+    let currentFilter = 'all';
+
+    function showToast(msg) {
+      if (!toast) return;
+      toastText.textContent = msg;
+      toast.classList.remove('translate-y-12', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-12', 'opacity-0', 'pointer-events-none');
+      }, 2000);
+    }
+
+    function applyFilters() {
+      const query = (searchInput?.value || '').toLowerCase().trim();
+      let visible = 0;
+
+      modItems.forEach(item => {
+        const name = (item.getAttribute('data-name') || '').toLowerCase();
+        const category = item.getAttribute('data-category');
+        const toggleBtn = item.querySelector('.mod-toggle');
+        const state = toggleBtn ? toggleBtn.getAttribute('data-state') : 'on';
+
+        let matchesSearch = query === '' || name.includes(query);
+        let matchesTab = true;
+
+        if (currentFilter === 'required') {
+          matchesTab = category === 'required';
+        } else if (currentFilter === 'optional') {
+          matchesTab = category === 'optional';
+        } else if (currentFilter === 'disabled') {
+          matchesTab = state === 'off';
+        }
+
+        if (matchesSearch && matchesTab) {
+          item.classList.remove('hidden');
+          visible++;
+        } else {
+          item.classList.add('hidden');
+        }
+      });
+
+      if (searchCount) {
+        searchCount.textContent = visible + (visible > 1 ? ' mods' : ' mod');
+      }
+    }
+
+    // Search filter
+    searchInput?.addEventListener('input', applyFilters);
+
+    // Filter pills
+    filterTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        filterTabs.forEach(t => {
+          t.classList.remove('active', 'bg-surface-elevated', 'border-primary/40', 'text-text-primary');
+          t.classList.add('bg-transparent', 'border-transparent', 'text-text-muted');
+        });
+        tab.classList.add('active', 'bg-surface-elevated', 'border-primary/40', 'text-text-primary');
+        tab.classList.remove('bg-transparent', 'border-transparent', 'text-text-muted');
+        currentFilter = tab.getAttribute('data-filter');
+        applyFilters();
+      });
+    });
+
+    // Toggle Mod Switch
+    document.querySelectorAll('.mod-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const state = btn.getAttribute('data-state');
+        const knob = btn.querySelector('span');
+        const row = btn.closest('.mod-item');
+        const modName = row ? row.querySelector('.text-text-primary')?.textContent : 'Mod';
+
+        if (state === 'on') {
+          btn.setAttribute('data-state', 'off');
+          btn.className = 'mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-surface-elevated';
+          knob.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-text-muted shadow-md transition duration-200 ease-in-out translate-x-0.5';
+          showToast(`Désactivé : ${modName} (.disabled)`);
+        } else {
+          btn.setAttribute('data-state', 'on');
+          btn.className = 'mod-toggle relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out bg-primary';
+          knob.className = 'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-surface-obsidian shadow-md transition duration-200 ease-in-out translate-x-5';
+          showToast(`Activé : ${modName}`);
+        }
+        applyFilters();
+      });
+    });
+
+    // Open Folder
+    openFolderBtn?.addEventListener('click', () => {
+      showToast('Ouverture du dossier .46anarchy/mods...');
+    });
+  })();
+</script>
+
+
+</body></html>

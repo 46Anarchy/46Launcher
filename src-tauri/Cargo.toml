@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# launcher (Tauri harness): thin `cargo tauri dev/build` entry point.
+# Excluded from the workspace (see root Cargo.toml): building it needs the
+# system WebKit/GTK stack + tauri-cli, while plain `cargo build` stays portable.
+
+[package]
+name = "launcher"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "46Anarchy launcher (Tauri v2 harness; backend lives in launcher-ui)"
+authors = ["46Anarchy"]
+homepage = "https://46anarchy.fr"
+repository = "https://github.com/46anarchy/46anarchy-launcher"
+
+[[bin]]
+name = "launcher"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+launcher-ui = { path = "../crates/ui", features = ["tauri-backend"] }

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# CI: fast, WebKit-free. `cargo test` stays headless by design (the
+# `src-tauri` harness is workspace-excluded), so this runs on plain
+# ubuntu-latest with the stable toolchain only.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # libdbus-1-dev: the `keyring` Secret Service backend links
+      # `-ldbus-1` (test binaries link it; pure-Rust crypto needs no
+      # OpenSSL). WebKit itself stays out (headless tests by design).
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace

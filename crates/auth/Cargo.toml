@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# launcher-auth: Microsoft/Xbox + session-token handling (core must stay UI-free).
+
+[package]
+name = "launcher-auth"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Authentication flows for the 46Anarchy launcher (Microsoft device-code + Xbox + Minecraft)"
+authors = ["46Anarchy"]
+homepage = "https://46anarchy.fr"
+repository = "https://github.com/46anarchy/46anarchy-launcher"
+
+[dependencies]
+launcher-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Real OS-keyring backend (Linux Secret Service) + pure-Rust crypto (no
+# OpenSSL system dep). WITHOUT a backend feature, keyring 3 silently uses
+# its in-memory mock store: logins work per session but vanish on restart.
+# `crypto-rust` (not `crypto-openssl`) keeps crypto dependency-free; linking
+# still needs the D-Bus client lib (`libdbus-1-dev` on Debian, `dbus-devel`
+# on Fedora — CI installs it, see .github/workflows).
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }

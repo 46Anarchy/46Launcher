@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# launcher-ui: Tauri v2 backend for the 46Anarchy launcher (vanilla HTML/CSS/JS frontend).
+
+[package]
+name = "launcher-ui"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+description = "Tauri v2 backend for the 46Anarchy launcher (invoke commands + shared state; static HTML/CSS/JS frontend)"
+authors = ["46Anarchy"]
+homepage = "https://46anarchy.fr"
+repository = "https://github.com/46anarchy/46anarchy-launcher"
+
+[dependencies]
+launcher-core = { path = "../core" }
+launcher-auth = { path = "../auth" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Process liveness for `get_game_status` (same line as launcher-core).
+sysinfo = "0.30"
+# Same reqwest line as core/auth (shared type for the HTTP client builders).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+# Tauri WebView shell. Optional so `cargo build` / `cargo test` stay portable
+# (no system webkit needed); enable with `--features launcher-ui/tauri-backend`
+# (used by the src-tauri harness) for `cargo tauri dev` / `cargo tauri build`.
+# NOTE: Tauri v2 has no `api-all` feature (that was v1); default features suffice.
+tauri = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+# Build script dependency for `generate_context!` (feature-gated like the
+# `tauri_app` module, so plain `cargo build` / `cargo test` stay portable).
+[build-dependencies]
+tauri-build = { version = "2", optional = true }
+
+[features]
+default = []
+tauri-backend = ["dep:tauri", "dep:tauri-build"]

@@ -1,0 +1,31 @@
+{
+  "name": "Paladium V11",
+  "root": "paladium",
+  "version": "v1.0.0",
+  "assetIndex": "https://launchermeta.mojang.com/v1/packages/1863782e33ce7b584fc45b037325a1964e095d3e/1.7.10.json",
+  "mc_version": "1.7.10",
+  "maintenance": { "enabled": false, "message": "" },
+  "main": "net.minecraft.launchwrapper.Launch",
+  "arguments": {
+    "game": ["--username", "${username}", "--version", "${version}", "--gameDir", "${gameDir}", "--accessToken", "${accessToken}", "--userType", "${userType}"],
+    "jvm": ["-Xmx${options.memory.max}", "-Djava.library.path=${options.library.path}"]
+  },
+  "models": [
+    { "name": "assets", "version": "v1.0.0", "description": "Assets", "dest": "assets" },
+    { "name": "libraries-windows", "version": "v1.0.0", "description": "Windows Libraries", "dest": "libraries", "properties": { "classpath": true }, "os": ["WINDOWS"] },
+    { "name": "libraries-linux", "version": "v1.0.0", "description": "Linux Libraries", "dest": "libraries", "properties": { "classpath": true }, "os": ["LINUX"] },
+    { "name": "natives-windows", "version": "v1.0.0", "description": "Windows Natives", "dest": "natives", "os": ["WINDOWS"] },
+    { "name": "natives-linux", "version": "v1.0.0", "description": "Linux Natives", "dest": "natives", "os": ["LINUX"] },
+    { "name": "mods", "version": "v1.0.0", "description": "Mods", "dest": "mods" },
+    { "name": "versions", "version": "v1.0.0", "description": "Versions", "dest": "versions" },
+    { "name": "java-linux", "version": "v1.0.0", "description": "Linux Java Runtime", "dest": "java", "properties": { "java": true }, "os": ["LINUX"] }
+  ],
+  "files": [
+    { "name": "shared-mod.jar", "model": "mods", "url": "https://cdn.46anarchy.fr/files/mods/shared-mod.jar", "size": 11, "sha1": "a9993e364706816aba3e25717850c26c9cd0d89d", "path": "shared-mod.jar", "os": [] },
+    { "name": "windows-native.dll", "model": "natives-windows", "url": "https://cdn.46anarchy.fr/files/natives/windows-native.dll", "size": 5, "sha1": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "path": "windows-native.dll", "os": ["WINDOWS"] },
+    { "name": "linux-native.so", "model": "natives-linux", "url": "https://cdn.46anarchy.fr/files/natives/linux-native.so", "size": 5, "sha1": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "path": "linux-native.so", "os": ["LINUX"] },
+    { "name": "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar", "model": "versions", "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.7.10-10.13.4.1614-1.7.10/forge-1.7.10-10.13.4.1614-1.7.10-universal.jar", "size": 3018833, "sha1": "25fd97f72beca728112256938e03e8105b1b78cc", "path": "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar", "os": [] },
+    { "name": "legacy.pala", "model": "mods", "url": "https://cdn.46anarchy.fr/files/mods/legacy.pala", "size": 7, "sha1": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "path": "legacy.pala", "os": [] },
+    { "name": "remapped-lib.jar", "model": "libraries-linux", "url": "https://cdn.46anarchy.fr/files/libraries/remapped-lib.jar", "size": 9, "sha1": "cccccccccccccccccccccccccccccccccccccccc", "path": "mods/nested/remapped-lib.jar", "os": ["LINUX"] }
+  ]
+}

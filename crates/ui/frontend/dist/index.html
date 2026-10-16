@@ -1,0 +1,578 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://cdn.46anarchy.fr" />
+  <title>46Anarchy Launcher — 1.7.10</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Inline SVG sprite (offline, currentColor, stroke 1.8). -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></symbol>
+      <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 2.5 21 7v10l-9 4.5L3 17V7z"/><path d="M3 7l9 4.5L21 7"/><path d="M12 11.5V21.5"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.6.3 4.6 1.9 5.3 4.3"/></symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M12.5 15H17"/></symbol>
+      <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M4 8h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 9h2a2.5 2.5 0 0 1 0 5h-2"/><path d="M7 2.5v2M11 2.5v2"/></symbol>
+      <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5 10-11"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3v4h-4"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.5 20 6v6c0 5-3.5 8.2-8 9.5C7.5 20.2 4 17 4 12V6z"/><path d="m8.8 12 2.2 2.2 4.2-4.7"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 0 2 2h13"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5S3.5 15.5 3.5 9.5A4.5 4.5 0 0 1 8 5c1.6 0 3.1.9 4 2.3A4.5 4.5 0 0 1 16 5a4.5 4.5 0 0 1 4.5 4.5c0 6-8.5 11-8.5 11Z"/></symbol>
+      <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="5"/><path d="M12 6v4"/></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="5" rx="1.5"/><path d="M4.5 9v10a1.5 1.5 0 0 0 1.5 1.5h12A1.5 1.5 0 0 0 19.5 19V9"/><path d="M10 13h4"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.4 3.8 5.6 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.6-3.8-9S9.5 5.4 12 3Z"/></symbol>
+      <symbol id="i-discord" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0414 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.176 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.176 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></symbol>
+      <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-3.9 4-6 7.5-6s6.5 2.1 7.5 6"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 19V6a1.5 1.5 0 0 1 1.5-1.5h5.5"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8"/><path d="m11 8 3.5 3.5L11 15"/><path d="M14.5 11.5H21"/><path d="M18 4.5 21 7l-3 2.5"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/><path d="M6.5 7l1 13a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l1-13"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z"/></symbol>
+      <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.7" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.5 6.5a4.5 4.5 0 0 0-6 5.6L3 17.6V21h3.4l5.5-5.5a4.5 4.5 0 0 0 5.6-6L14 13l-3-3z"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15.5-4.5-4.5L7 20.5"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 8-5 4 5 4"/><path d="m16 8 5 4-5 4"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Mandatory login: blocking modal (no close button) shown when no session. -->
+  <div id="login-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="login-title">
+    <div class="modal-card">
+      <div class="modal-logo"><span class="diamond"></span></div>
+      <h1 id="login-title">Bienvenue sur 46Anarchy</h1>
+      <p class="muted">Connecte-toi avec ton compte Microsoft pour jouer.</p>
+      <div id="login-initial">
+        <button id="btn-microsoft" class="btn btn-primary btn-block" type="button">
+          <svg class="icon icon-sm"><use href="#i-person"/></svg>
+          Se connecter avec Microsoft
+        </button>
+        <p id="login-error" class="error hidden"></p>
+      </div>
+      <div id="device-panel" class="hidden">
+        <ol class="steps">
+          <li><strong>1.</strong> Code copié automatiquement, collez-le si besoin</li>
+          <li><strong>2.</strong> Page Microsoft ouverte, sinon cliquez ci-dessous</li>
+          <li><strong>3.</strong> Validez sur la page, le launcher se connecte tout seul</li>
+        </ol>
+        <a id="verification-link" class="device-link" href="https://www.microsoft.com/link" target="_blank" rel="noopener">microsoft.com/link</a>
+        <div id="user-code" class="device-code">····-····</div>
+        <div class="row row-center">
+          <button id="btn-copy-code" class="btn btn-ghost btn-small" type="button">
+            <svg class="icon icon-sm"><use href="#i-copy"/></svg> Copier le code
+          </button>
+          <button id="btn-open-ms" class="btn btn-ghost btn-small" type="button">
+            <svg class="icon icon-sm"><use href="#i-external"/></svg> Ouvrir la page Microsoft
+          </button>
+        </div>
+        <p class="muted">Expire dans <span id="device-countdown" class="mono">15:00</span> — validation en cours…</p>
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="device-error" class="error hidden"></p>
+        <button id="btn-retry-login" class="btn btn-primary btn-block hidden" type="button">Relancer la connexion</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top titlebar -->
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px;min-width:0">
+      <div class="brand">
+        <span class="brand-diamond"></span>
+        <span class="brand-name">46Anarchy Launcher <span class="dim">• 1.7.10</span></span>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="top-links">
+        <a id="link-site" href="https://46anarchy.fr/" target="_blank" rel="noopener">
+          <svg class="icon icon-sm"><use href="#i-globe"/></svg><span class="lbl">46anarchy.fr</span>
+        </a>
+        <a id="link-discord-top" href="https://discord.46anarchy.fr" target="_blank" rel="noopener">
+          <svg class="icon icon-sm"><use href="#i-discord"/></svg><span class="lbl">Discord</span>
+        </a>
+      </div>
+      <div id="user-chip" class="user-chip hidden" role="button" tabindex="0" title="Changer de compte">
+        <span class="avatar"><svg class="icon"><use href="#i-person"/></svg><img id="avatar-top-img" class="avatar-img" alt="" referrerpolicy="no-referrer" /></span>
+        <span class="name" id="user-name">—</span>
+        <span class="muted mono" style="font-size:10px">▾</span>
+        <div id="account-menu" class="account-menu hidden"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- Slim left sidebar -->
+    <aside class="sidebar">
+      <div>
+        <p class="nav-label">Navigation Client</p>
+        <nav class="nav" aria-label="Navigation">
+          <button class="nav-item active" data-tab="home" type="button">
+            <svg class="icon"><use href="#i-home"/></svg>Accueil
+          </button>
+          <button class="nav-item" data-tab="mods" type="button">
+            <svg class="icon"><use href="#i-box"/></svg>Mods
+          </button>
+          <button class="nav-item" data-tab="java" type="button">
+            <svg class="icon"><use href="#i-cpu"/></svg>Configuration Java
+          </button>
+          <button class="nav-item" data-tab="accounts" type="button">
+            <svg class="icon"><use href="#i-users"/></svg>Comptes
+          </button>
+          <button class="nav-item" data-tab="console" type="button">
+            <svg class="icon"><use href="#i-terminal"/></svg>Console
+          </button>
+        </nav>
+      </div>
+      <div class="ram-card" id="ram-footer">
+        <div class="ram-row"><span class="lbl">RAM Allouée</span><span class="val" id="ram-footer-val">—</span></div>
+        <div class="ram-bar"><div id="ram-footer-bar" style="width:0%"></div></div>
+        <div class="ram-sub"><span id="java-footer-label">—</span><span class="ok">Opti</span></div>
+      </div>
+    </aside>
+
+    <!-- Main staging grid -->
+    <main class="viewport">
+      <div class="viewport-inner">
+        <div id="demo-banner" class="banner hidden">
+          <span>Ouvrez dans l'app Tauri — backend indisponible.</span>
+          <button id="btn-dismiss-demo" class="btn btn-ghost btn-small" type="button">Masquer</button>
+        </div>
+
+        <!-- ACCUEIL -->
+        <section id="tab-home" class="tab-page">
+          <div id="maintenance-banner" class="banner hidden"></div>
+          <div class="card hero">
+            <span class="kicker" id="version-pill"><span class="dot"></span>46Anarchy • Forge 1.7.10</span>
+            <div class="hero-row">
+              <div class="hero-copy">
+                <h1 class="hero-title">46ANARCHY 1.7.10</h1>
+                <p>Serveur Anarchy PvP sans règles avec minerais légendaires et machines exclusives. Un monde impitoyable sans reset depuis l'origine.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="launch-row">
+              <div class="launch-status">
+                <span class="dot" id="client-dot"></span>
+                <div class="txt">
+                  <strong id="status-line">Chargement…</strong>
+                  <small id="client-sub">Chargement…</small>
+                </div>
+              </div>
+              <div class="launch-actions">
+                <button id="btn-verify" class="btn btn-secondary" type="button">
+                  <svg class="icon icon-sm"><use href="#i-refresh"/></svg> Vérifier
+                </button>
+                <button id="btn-play" class="btn btn-primary btn-play" type="button">
+                  <svg class="icon icon-sm"><use href="#i-play"/></svg> JOUER
+                </button>
+                <button id="btn-launch-menu" class="btn btn-secondary btn-icon" type="button" title="Plus d'actions" aria-label="Plus d'actions">
+                  <svg class="icon icon-sm"><use href="#i-dots"/></svg>
+                </button>
+                <div id="launch-menu" class="account-menu hidden">
+                  <button id="menu-manifest" type="button">Actualiser le manifeste</button>
+                  <button id="menu-folder" type="button">Ouvrir le dossier du jeu</button>
+                  <button id="menu-uninstall" type="button">Désinstaller le jeu</button>
+                </div>
+              </div>
+            </div>
+            <div class="launch-sub">
+              <div class="pack-select"><span>Version</span>
+                <span id="pack-flavor-current">Modpack Paladium (Java 8)</span>
+                <button id="pack-flavor-edit" class="link-btn" type="button">Modifier</button>
+              </div>
+              <p class="card-sub" id="install-detail">Prêt — cliquez JOUER, on s'occupe du reste.</p>
+            </div>
+            <div class="progress-zone hidden" id="hero-progress">
+              <div class="progress" role="progressbar" aria-label="Progression du jeu"><div id="hero-bar" class="progress-fill"></div></div>
+              <div class="progress-meta"><span id="hero-detail">—</span><span class="pct" id="hero-pct"></span></div>
+            </div>
+          </div>
+
+          <div class="grid-2 home-grid">
+            <div class="mini-card server-card">
+              <span class="server-icon green"><svg class="icon icon-lg"><use href="#i-server"/></svg></span>
+              <div class="server-body">
+                <div class="server-title-row"><strong>Serveur 46Anarchy</strong><span class="online-tag" id="server-online-tag"><span class="dot"></span><span id="server-online-label">Chargement…</span></span></div>
+                <div class="server-stats"><span class="server-stat"><span class="mono" id="server-address">mc.46anarchy.fr</span></span><span class="server-stat">Ping : <span id="server-ping">—</span></span><span class="server-stat">TPS : <span id="server-tps" title="TPS non exposé par le ping">—</span></span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="section-head">
+                <h2>Notes de patch</h2>
+                <button class="link-btn" id="btn-changelog" type="button">Historique complet →</button>
+              </div>
+              <div class="patch-stack" id="patch-notes">
+                <div class="card patch-card">
+                  <h3>Chargement…</h3>
+                  <p>Récupération des notes de patch…</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODS -->
+        <section id="tab-mods" class="tab-page hidden">
+          <div class="mods-head">
+            <div>
+              <span class="kicker"><span class="dot"></span>MODPACK 1.7.10 FORGE</span>
+              <h1>Gestionnaire des Mods</h1>
+              <p class="sub" id="mods-subtitle">Chargement des mods…</p>
+            </div>
+            <button id="btn-open-mods" class="btn btn-secondary" type="button">
+              <svg class="icon icon-sm"><use href="#i-folder"/></svg> Ouvrir le dossier des mods
+            </button>
+          </div>
+          <div class="card filter-bar">
+            <div class="filter-tabs" id="mods-filters" role="tablist" aria-label="Filtrer les mods">
+              <button class="filter-tab active" data-filter="all" type="button">Tous <span class="count" id="count-all">0</span></button>
+              <button class="filter-tab" data-filter="required" type="button">Obligatoires <span class="count" id="count-required">0</span></button>
+              <button class="filter-tab" data-filter="optional" type="button">Optionnels <span class="count" id="count-optional">0</span></button>
+              <button class="filter-tab" data-filter="disabled" type="button">Désactivés <span class="count" id="count-disabled">0</span></button>
+            </div>
+            <div class="search-wrap">
+              <svg class="icon icon-sm"><use href="#i-search"/></svg>
+              <input id="mods-search" type="search" placeholder="Rechercher un mod..." autocomplete="off" aria-label="Rechercher un mod" />
+              <span class="search-count" id="mods-search-count">0 mods</span>
+            </div>
+          </div>
+          <div class="card mods-table">
+            <div class="mods-thead">
+              <div>Nom du mod &amp; Description</div>
+              <div class="hide-m">Version</div>
+              <div class="r hide-m">Taille</div>
+              <div class="r">Statut</div>
+            </div>
+            <div class="mods-list" id="mods-list"></div>
+          </div>
+        </section>
+
+        <!-- CONFIGURATION JAVA -->
+        <section id="tab-java" class="tab-page hidden">
+          <div class="card">
+            <div class="ram-head">
+              <div>
+                <h2 class="card-title"><svg class="icon icon-sm"><use href="#i-zap"/></svg>Allocation Mémoire (RAM)</h2>
+                <p class="card-sub">Recommandé : 4 Go pour jouer avec le pack de mods complet.</p>
+              </div>
+              <div class="ram-big"><span id="ram-display-gb">4 Go</span> <small>(<span id="ram-display-mb">4096</span> Mo)</small></div>
+            </div>
+            <input id="ram-range" type="range" min="1024" max="12288" step="512" value="4096" aria-label="Mémoire allouée en Mo" />
+            <div class="ram-scale" id="ram-scale"><span>1 Go</span><span>6 Go</span><span>12 Go</span></div>
+            <div class="preset-row" id="ram-presets">
+              <span class="lbl">Raccourcis :</span>
+              <button class="preset-btn" data-ram="2048" type="button">2 Go</button>
+              <button class="preset-btn active" data-ram="4096" type="button">4 Go</button>
+              <button class="preset-btn" data-ram="6144" type="button">6 Go</button>
+              <button class="preset-btn" data-ram="8192" type="button">8 Go</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title"><svg class="icon icon-sm"><use href="#i-image"/></svg>Résolution et Affichage</h2>
+            <div class="grid-2" style="margin-top:12px">
+              <label class="field" style="margin:0">
+                <span class="flabel">Résolution de jeu</span>
+                <span class="pack-select">
+                  <button id="res-btn" class="pack-flavor-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Résolution de jeu">
+                    <span id="res-label">1920 × 1080 (1080p FHD - Recommandé)</span>
+                    <svg class="icon icon-sm"><use href="#i-chevron"/></svg>
+                  </button>
+                  <div class="account-menu pack-flavor-menu res-menu hidden" id="res-menu" role="menu">
+                    <button type="button" data-res="1920x1080" role="menuitem">
+                      <span class="flavor-main">1920 × 1080 (1080p FHD - Recommandé)</span>
+                      <small>Écran large standard</small>
+                    </button>
+                    <button type="button" data-res="2560x1440" role="menuitem">
+                      <span class="flavor-main">2560 × 1440 (1440p QHD)</span>
+                      <small>Écran haute définition</small>
+                    </button>
+                    <button type="button" data-res="1280x720" role="menuitem">
+                      <span class="flavor-main">1280 × 720 (720p HD)</span>
+                      <small>Petites configs</small>
+                    </button>
+                    <button type="button" data-res="3840x2160" role="menuitem">
+                      <span class="flavor-main">3840 × 2160 (4K UHD)</span>
+                      <small>Écran très haute définition</small>
+                    </button>
+                    <button type="button" data-res="1600x900" role="menuitem">
+                      <span class="flavor-main">1600 × 900 (900p HD+)</span>
+                      <small>Intermédiaire</small>
+                    </button>
+                    <button type="button" data-res="1366x768" role="menuitem">
+                      <span class="flavor-main">1366 × 768 (Portable)</span>
+                      <small>Portables anciens</small>
+                    </button>
+                  </div>
+                </span>
+              </label>
+              <div class="check-row">
+                <label class="check"><input id="fullscreen-toggle" type="checkbox" /> Plein écran au lancement</label>
+                <label class="check"><input id="console-toggle" type="checkbox" checked /> Console en direct</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="ram-head">
+              <label class="card-title" for="jvm-args" style="margin:0"><svg class="icon icon-sm"><use href="#i-code"/></svg>Arguments JVM Avancés</label>
+              <div class="jvm-tabs" id="jvm-presets">
+                <button data-preset="46anarchy" class="active" type="button">46Anarchy</button>
+                <button data-preset="g1gc" type="button">Optimisé G1GC</button>
+                <button data-preset="lowram" type="button">Faible RAM</button>
+                <button data-preset="graal-zgc" type="button">GraalVM 21 — ZGC</button>
+                <button data-preset="graal-lowram" type="button">GraalVM 21 — basse RAM</button>
+              </div>
+            </div>
+            <small class="muted" id="jvm-gc-effectif" style="display:block;margin-top:8px;font-size:11px">Collecteur GC appliqué au lancement : G1GC</small>
+            <textarea id="jvm-args" rows="3" spellcheck="false" style="margin-top:12px"></textarea>
+            <label class="field" style="margin-top:16px">
+              <span class="flabel">Dossier du jeu (vide = emplacement par défaut)</span>
+              <input id="set-gamedir" type="text" placeholder="Emplacement par défaut" autocomplete="off" spellcheck="false" />
+            </label>
+            <label class="field" style="margin:0" title="Priorité : champ ci-dessus → variable d'environnement PRISM_MSA_CLIENT_ID → valeur compilée.">
+              <span class="flabel">Identifiant de connexion Microsoft</span>
+              <input id="set-clientid" type="text" placeholder="Valeur par défaut" autocomplete="off" spellcheck="false" />
+              <small class="muted">Normalement déjà renseigné, ne touchez à rien.</small>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-ghost" id="btn-reset-all" type="button">
+              <svg class="icon icon-sm"><use href="#i-refresh"/></svg> Restaurer les valeurs par défaut
+            </button>
+            <span class="muted" style="font-size:12px">Modifications enregistrées automatiquement.</span>
+          </div>
+        </section>
+
+        <!-- COMPTES -->
+        <section id="tab-accounts" class="tab-page hidden">
+          <div>
+            <span class="kicker"><span class="dot"></span>COMPTE MICROSOFT</span>
+            <h1 style="font-size:24px;font-weight:800;margin:4px 0 2px">Comptes</h1>
+            <p class="muted" style="font-size:12px;font-family:var(--font-mono);margin:0">Plusieurs comptes possibles — celui en surbrillance lance le jeu.</p>
+          </div>
+          <div class="card" id="login-card">
+            <h2 class="card-title"><svg class="icon icon-sm"><use href="#i-shield"/></svg>Ajouter un compte</h2>
+            <p class="card-sub">Ajoutez un compte avec Microsoft, puis actualisez ou retirez chaque compte dans sa ligne. Le compte actif se choisit via l'avatar en haut à droite.</p>
+            <button id="btn-login-accounts" class="btn btn-primary" type="button">
+              <svg class="icon icon-sm"><use href="#i-person"/></svg> Se connecter avec Microsoft
+            </button>
+            <div class="divider" style="margin:16px 0"></div>
+            <div id="accounts-list"><p class="muted">Chargement…</p></div>
+          </div>
+        </section>
+
+        <!-- CONSOLE -->
+        <section id="tab-console" class="tab-page hidden">
+          <div>
+            <span class="kicker"><span class="dot"></span>JOURNAL</span>
+            <h1 style="font-size:24px;font-weight:800;margin:4px 0 2px">Console</h1>
+          </div>
+          <div class="card">
+            <div class="ram-head" style="margin-bottom:12px">
+              <h2 class="card-title"><svg class="icon icon-sm"><use href="#i-terminal"/></svg>Journal</h2>
+              <div style="display:flex;gap:8px;align-items:center">
+                <label class="check" style="font-size:12px"><input id="console-autoscroll" type="checkbox" checked /> Défilement auto</label>
+                <button id="btn-clear-log" class="btn btn-ghost btn-small" type="button">
+                  <svg class="icon icon-sm"><use href="#i-trash"/></svg> Effacer
+                </button>
+              </div>
+            </div>
+            <pre id="install-log" class="log">Les détails d'installation apparaîtront ici.</pre>
+          </div>
+          <div class="card">
+            <div class="ram-head" style="margin-bottom:12px">
+              <h2 class="card-title"><svg class="icon icon-sm"><use href="#i-terminal"/></svg>Console du jeu</h2>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="btn-clear-gamelog" class="btn btn-ghost btn-small" type="button">
+                  <svg class="icon icon-sm"><use href="#i-trash"/></svg> Effacer
+                </button>
+              </div>
+            </div>
+            <pre id="game-log" class="log" data-placeholder="1">La sortie du jeu apparaîtra ici après le lancement (option « Console en direct »).</pre>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Bottom Tauri status bar -->
+  <footer class="statusbar">
+    <span class="dot" id="foot-dot"></span>
+    <span id="stat-version">—</span>
+    <span>•</span>
+    <span id="stat-status">—</span>
+    <span class="spacer"></span>
+    <span id="stat-player">—</span>
+  </footer>
+
+  <!-- Install options: Loki opt-in + modpack flavor (shown before every install;
+       both unchecked/persisted semantics unchanged: Loki unchecked by default with
+       no persistence, flavor persisted to settings). The home card only shows
+       the current flavor (readonly) with a "Modifier" shortcut back here. -->
+  <div id="loki-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="loki-modal-title">
+    <div class="modal-card loki-modal">
+      <div class="modal-logo"><span class="diamond"></span></div>
+      <h2 id="loki-modal-title">Options d'installation</h2>
+      <div class="pack-select"><span>Version</span>
+        <button id="pack-flavor-btn" class="pack-flavor-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Version du jeu">
+          <span id="pack-flavor-label">Modpack Paladium (Java 8)</span>
+          <svg class="icon icon-sm"><use href="#i-chevron"/></svg>
+        </button>
+        <div id="pack-flavor-menu" class="account-menu pack-flavor-menu hidden" role="menu">
+          <button type="button" data-flavor="default" role="menuitem">
+            <span class="flavor-main">Modpack Paladium (Java 8)</span>
+            <small>Java 8 — pack Paladium classique</small>
+          </button>
+          <button type="button" data-flavor="experimental" role="menuitem" disabled title="Branche expérimentale temporairement désactivée — le modpack Paladium reste disponible.">
+            <span class="flavor-main">Expérimental modernisé (bientôt disponible)</span>
+            <small>Bientôt disponible — le modpack Paladium reste sélectionné</small>
+          </button>
+        </div>
+      </div>
+      <p class="muted loki-help">Le changement de version déplace les mods de l'autre version et réinstalle ce qu'il manque au prochain JOUER.</p>
+      <div class="jdk-info-card" id="jdk-info-card">
+        <span class="mini-icon"><svg class="icon icon-sm"><use href="#i-cpu"/></svg></span>
+        <div class="jdk-info-txt">
+          <strong id="jdk-info-name">Runtime Java</strong>
+          <small id="jdk-info-status">Vérification…</small>
+          <small class="muted">Géré automatiquement selon le modpack.</small>
+        </div>
+      </div>
+      <label class="check loki-check" for="loki-checkbox">
+        <input id="loki-checkbox" type="checkbox" />
+        <span>Installer Loki (cheat client optionnel)</span>
+      </label>
+      <p class="muted loki-help">Cheat fonctionnel sur 46Anarchy (Paladium events) — https://cdn.46anarchy.fr/files/loki.jar . Optionnel, désactivé par défaut.</p>
+      <div class="row row-center loki-actions">
+        <button id="btn-loki-cancel" class="btn btn-ghost" type="button">Annuler</button>
+        <button id="btn-loki-install" class="btn btn-primary" type="button">Installer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Install progress: shown for the whole install (both entry points),
+       driven by install-progress events; Annuler aborts the backend run.
+       Shares the java-modal visual language (header + download box + foot);
+       every element ID is load-bearing for main.js — do not rename. -->
+  <div id="install-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="install-modal-title">
+    <div class="modal-card java-modal">
+      <div class="java-modal-head">
+        <div class="title-row">
+          <span class="mini-icon"><svg class="icon icon-lg"><use href="#i-download"/></svg></span>
+          <div>
+            <h2 id="install-modal-title">Installation en cours…</h2>
+            <p class="dl-sub">Téléchargement des fichiers du jeu</p>
+          </div>
+        </div>
+      </div>
+      <div class="java-modal-body">
+        <div class="java-dl-box">
+          <div class="java-dl-top">
+            <span class="fname"><span class="dot"></span><span id="install-modal-file">Préparation…</span></span>
+            <span class="pct" id="install-modal-pct">0%</span>
+          </div>
+          <div class="progress"><div id="install-modal-bar" class="progress-fill"></div></div>
+          <div class="java-metrics">
+            <span id="install-modal-detail">Préparation…</span>
+          </div>
+        </div>
+      </div>
+      <div class="java-modal-foot single">
+        <div class="right">
+          <button id="btn-install-modal-cancel" class="btn btn-ghost btn-small" type="button">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Uninstall confirm: styled destructive confirm (payload wiped,
+       settings/runtimes/logs kept). -->
+  <div id="uninstall-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="uninstall-modal-title">
+    <div class="modal-card loki-modal">
+      <div class="modal-logo"><span class="diamond"></span></div>
+      <h2 id="uninstall-modal-title">Désinstaller le jeu ?</h2>
+      <p class="muted">Les mods, bibliothèques, versions et ressources seront supprimés. Réglages, runtimes Java et journaux sont conservés.</p>
+      <div class="row row-center loki-actions">
+        <button id="btn-uninstall-cancel" class="btn btn-ghost" type="button">Annuler</button>
+        <button id="btn-uninstall-confirm" class="btn btn-primary" type="button">Désinstaller</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Java 8 download modal -->
+  <div id="java-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="java-modal-title">
+    <div class="modal-card java-modal">
+      <div class="java-modal-head">
+        <div class="title-row">
+          <span class="mini-icon"><svg class="icon icon-lg"><use href="#i-download"/></svg></span>
+          <div>
+            <h2 id="java-modal-title">Téléchargement du Runtime Java 8</h2>
+            <p class="dl-sub">Adoptium Temurin OpenJDK 8 (x64) requis pour 46Anarchy 1.7.10</p>
+          </div>
+        </div>
+        <button class="icon-btn" id="java-modal-close" type="button" title="Fermer" aria-label="Fermer">
+          <svg class="icon icon-sm"><use href="#i-x"/></svg>
+        </button>
+      </div>
+      <div class="java-modal-body">
+        <div class="java-dl-box">
+          <div class="java-dl-top">
+            <span class="fname"><span class="dot"></span><span id="java-modal-file">Temurin-8-jre-x64</span></span>
+            <span class="pct" id="java-modal-pct">0%</span>
+          </div>
+          <div class="progress"><div id="java-dl-bar" class="progress-fill"></div></div>
+          <div class="java-metrics">
+            <span id="java-dl-detail">Préparation…</span>
+            <span><span class="speed"><svg class="icon icon-sm"><use href="#i-zap"/></svg><span id="java-dl-speed">—</span></span> · <span id="java-dl-eta">—</span></span>
+          </div>
+        </div>
+        <div class="java-tech">
+          <div class="trow">
+            <span class="k"><svg class="icon icon-sm"><use href="#i-shield"/></svg>Contrôle d'intégrité SHA-256</span>
+            <span class="sha-ok" id="java-sha-state">Signature Validée</span>
+          </div>
+          <div>
+            <span class="k" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Répertoire d'installation :</span>
+            <div class="java-path" style="margin-top:6px">
+              <svg class="icon icon-sm"><use href="#i-folder"/></svg><span id="java-modal-path">—</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;color:var(--muted);font-size:11px">
+            <svg class="icon icon-sm" style="color:var(--primary)"><use href="#i-info"/></svg>
+            <span>Extraction automatique et injection des arguments JVM au lancement.</span>
+          </div>
+        </div>
+      </div>
+      <div class="java-modal-foot">
+        <button class="btn btn-ghost btn-small" id="btn-java-bg" type="button">Arrière-plan</button>
+        <div class="right">
+          <button class="btn btn-ghost btn-small" id="btn-java-cancel" type="button">Annuler</button>
+          <button class="btn btn-secondary btn-small" id="btn-java-working" type="button" disabled>
+            <svg class="icon icon-sm spin"><use href="#i-refresh"/></svg> Installation en cours...
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"><svg class="icon icon-sm"><use href="#i-info"/></svg><span id="toast-text">—</span></div>
+  <script src="main.js" defer></script>
+</body>
+</html>
