@@ -440,6 +440,9 @@ h1.hero-title { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; marg
 .link-btn:hover { text-decoration: underline; }
 .online-tag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--online); }
 .online-tag .dot { width: 6px; height: 6px; }
+/* Libellé de statut : jamais de phrase longue qui déforme la carte (le
+   détail complet vit dans le `title` de `#server-online-tag`). */
+#server-online-label { display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 /* patch notes */
 .home-grid { align-items: start; }
@@ -461,6 +464,10 @@ h1.hero-title { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; marg
 .server-stats { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); line-height: 1.6; }
 .server-stat { display: block; }
 .patch-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+/* Indice d'échec discret sous le titre (échec total du fetch distant :
+   texte atténué, jamais de toast) ; vide = masqué, succès = inchangé. */
+.patch-sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 2px 0 0; }
+.patch-sub:empty { display: none; }
 .section-head { display: flex; align-items: center; justify-content: space-between; }
 .section-head h2 { font-family: var(--font-label); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
 .patch-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-input); background: rgba(255, 92, 0, 0.1); border: 1px solid rgba(255, 92, 0, 0.25); color: var(--primary); }
@@ -469,8 +476,41 @@ h1.hero-title { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; marg
 .patch-card p { font-size: 12px; color: var(--text-2); margin: 0 0 8px; }
 .patch-card ul { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0; padding-left: 18px; }
 .patch-card li { margin: 4px 0; }
-.patch-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.patch-top .ver { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.patch-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.patch-top .ver { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; max-width: 60%; }
+/* Cartes compactes de l'accueil (maquette : badge + repo/date, titre,
+   lien court — jamais d'URL brute qui déborde de la colonne à 1280px). */
+.home-grid > * { min-width: 0; }
+.patch-stack { min-width: 0; }
+.patch-card.patch-compact { padding: 12px 14px; min-width: 0; overflow: hidden; }
+.patch-card.patch-compact h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 8px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.patch-link {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--primary);
+  text-decoration: none;
+}
+.patch-link:hover { text-decoration: underline; }
+.patch-snippet {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* banners */
 .banner {
@@ -771,13 +811,20 @@ input[type="range"]::-moz-range-thumb { width: 14px; height: 18px; border-radius
 
 /* ---------- console ---------- */
 
-/* Listes longues : le défilement reste local (pas de chaîne vers le
-   viewport), les lignes hors champ sont sautées au rendu (aucun
-   `scroll-behavior:smooth` — le collage reste instantané). */
-.mods-list, #accounts-list, .log { overscroll-behavior: contain; }
+/* Listes longues : les lignes hors champ sont sautées au rendu (aucun
+   `scroll-behavior:smooth` — le collage reste instantané). Pas de
+   `overscroll-behavior: contain` ici : il piégeait la molette dans les
+   boîtes internes au lieu de chaîner vers le viewport. */
+/* Long lists: off-screen rows are skipped at render time (wheel scrolling
+   verified working with these on; `overscroll-behavior: contain` stays out
+   — it trapped the wheel inside inner boxes). */
 .mod-row, .account-row, #game-log > div {
   content-visibility: auto;
   contain-intrinsic-size: auto 48px;
+}
+.patch-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 .log {

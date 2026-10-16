@@ -59,40 +59,70 @@
     toastTimer = setTimeout(function () { el.classList.add("hidden"); }, 4000);
   }
 
-  // Suivi d'épingle (« pin-following ») : ancré = case cochée ET (à ~24px
-  // du bas OU journal/onglet qui vient de devenir visible). Épinglé : on
-  // colle au bas à chaque ajout et à l'affichage de l'onglet ; sinon (case
-  // décochée ou lecture remontée) on ne secoue jamais la position. Couvre
+  // Suivi d'épingle : collage en bas à l'ajout IFF (nouvelle ligne ajoutée
+  // ET case cochée ET lecteur à ~24px du bas AVANT l'ajout). Jamais de
+  // collage à l'affichage de l'onglet, jamais quand le journal est caché
+  // (on ajoute seulement), jamais de lecteur remonté arraché. Couvre
   // `#install-log` et `#game-log` (mêmes aides).
   var NEAR_BOTTOM_PX = 24;
+  // `#install-log` : même plafond que `#game-log` (500 lignes, même découpe
+  // par l'avant — le journal d'installation était le seul conteneur DOM à
+  // croissance illimitée).
+  var INSTALL_LOG_CAP = 500;
+  var installLogCount = 0;
   function autoscrollOn() {
     var box = $("console-autoscroll");
     return !box || box.checked;
   }
   function isNearBottom(el) {
-    if (!el) return true;
-    // Caché (onglet invisible) : aucune mesure — traité comme ancré, le
-    // collage réel a lieu à l'affichage de l'onglet (voir `switchTab`).
-    if (el.clientHeight === 0) return true;
+    if (!el) return false;
+    // Caché (onglet invisible) : aucune mesure fiable — traité comme NON
+    // ancré : on ajoute la ligne sans toucher au défilement.
+    if (el.clientHeight === 0) return false;
     return (el.scrollHeight - el.scrollTop - el.clientHeight) <= NEAR_BOTTOM_PX;
   }
   function scrollLogBottom(el) {
     if (!el) return;
     try { el.scrollTop = el.scrollHeight; } catch (e) {}
   }
-  function scrollPinnedLogs() {
-    if (!autoscrollOn()) return;
-    scrollLogBottom($("install-log"));
-    scrollLogBottom($("game-log"));
-  }
 
-  function log(line) {
+  // Rafales : les lignes sont mises en file puis vidées en un seul
+  // `DocumentFragment` par trame (une lecture de mise en page, un collage),
+  // ordre préservé, plafond et pin-follow inchangés.
+  var installLogQueue = [];
+  var installLogScheduled = false;
+  function scheduleInstallFlush() {
+    if (installLogScheduled) return;
+    installLogScheduled = true;
+    function run() { installLogScheduled = false; flushInstallLog(); }
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 32);
+  }
+  function flushInstallLog() {
+    if (!installLogQueue.length) return;
     var el = $("install-log");
-    if (!el) return;
+    if (!el) { installLogQueue.length = 0; installLogCount = 0; return; }
     var pinned = autoscrollOn() && isNearBottom(el);
-    if (el.textContent === LOG_PLACEHOLDER || el.textContent === "—") el.textContent = "";
-    el.textContent += line + "\n";
+    if (el.textContent === LOG_PLACEHOLDER || el.textContent === "—") {
+      el.textContent = "";
+      installLogCount = 0;
+    }
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < installLogQueue.length; i++) {
+      frag.appendChild(document.createTextNode(installLogQueue[i] + "\n"));
+    }
+    installLogQueue.length = 0;
+    el.appendChild(frag);
+    installLogCount += i;
+    while (installLogCount > INSTALL_LOG_CAP && el.firstChild) {
+      el.removeChild(el.firstChild);
+      installLogCount -= 1;
+    }
     if (pinned) scrollLogBottom(el);
+  }
+  function log(line) {
+    installLogQueue.push(String(line));
+    scheduleInstallFlush();
   }
 
   function copyText(text, okMsg, silent) {
@@ -126,27 +156,47 @@
      Capped at 500 rows so a chatty mod can't freeze the WebView. */
   var GAME_LOG_CAP = 500;
   var gameLogCount = 0;
-  function glog(line) {
+  var gameLogQueue = [];
+  var gameLogScheduled = false;
+  function scheduleGameFlush() {
+    if (gameLogScheduled) return;
+    gameLogScheduled = true;
+    function run() { gameLogScheduled = false; flushGameLog(); }
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+    else setTimeout(run, 32);
+  }
+  function flushGameLog() {
+    if (!gameLogQueue.length) return;
     var el = $("game-log");
-    if (!el) return;
+    if (!el) { gameLogQueue.length = 0; gameLogCount = 0; return; }
     var pinned = autoscrollOn() && isNearBottom(el);
     if (el.dataset.placeholder === "1") {
       el.textContent = "";
       el.dataset.placeholder = "";
       gameLogCount = 0;
     }
-    var div = document.createElement("div");
-    div.textContent = line;
-    el.appendChild(div);
-    gameLogCount += 1;
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < gameLogQueue.length; i++) {
+      var div = document.createElement("div");
+      div.textContent = gameLogQueue[i];
+      frag.appendChild(div);
+    }
+    gameLogQueue.length = 0;
+    el.appendChild(frag);
+    gameLogCount += i;
     while (gameLogCount > GAME_LOG_CAP && el.firstChild) {
       el.removeChild(el.firstChild);
       gameLogCount -= 1;
     }
     if (pinned) scrollLogBottom(el);
   }
+  function glog(line) {
+    gameLogQueue.push(String(line));
+    scheduleGameFlush();
+  }
 
   function clearGameLog() {
+    gameLogQueue.length = 0;
     var el = $("game-log");
     if (!el) return;
     el.textContent = "";
@@ -241,18 +291,35 @@
 
   /* ---------- tabs ---------- */
 
+  // Liste statique mise en cache une fois (le changement d'onglet ne
+  // rescane plus le DOM à chaque bascule).
+  var navItemsCache = null;
+  var tabPagesCache = null;
+  function getNavItems() {
+    if (!navItemsCache) navItemsCache = document.querySelectorAll(".nav-item");
+    return navItemsCache;
+  }
+  function getTabPages() {
+    if (!tabPagesCache) {
+      tabPagesCache = {
+        home: $("tab-home"), mods: $("tab-mods"), java: $("tab-java"),
+        accounts: $("tab-accounts"), console: $("tab-console")
+      };
+    }
+    return tabPagesCache;
+  }
+
   function switchTab(name) {
-    var items = document.querySelectorAll(".nav-item");
+    var items = getNavItems();
     for (var i = 0; i < items.length; i++) {
       items[i].classList.toggle("active", items[i].getAttribute("data-tab") === name);
     }
-    var pages = { home: "tab-home", mods: "tab-mods", java: "tab-java", accounts: "tab-accounts", console: "tab-console" };
+    var pages = getTabPages();
     for (var key in pages) {
-      var page = $(pages[key]);
+      var page = pages[key];
       if (page) page.classList.toggle("hidden", key !== name);
     }
     if (name === "mods" && HAS_TAURI) refreshMods();
-    if (name === "console") scrollPinnedLogs();
     if (name === "home" && HAS_TAURI) {
       fetchServerStatus();
       fetchPatchNotes();
@@ -263,13 +330,31 @@
 
   var countdownTimer = null;
   var sessionCached = null;
-  // Boot auth gate: the backend restores the keyring session
-  // asynchronously (often faster than WebKit init), so an early null
-  // must NOT pop the login modal — it would flash then vanish. A null
-  // arms a single 2.5s timer instead: restores landing first clear it
-  // silently, otherwise the modal opens once auth is resolved.
+  // Boot auth gate (poll-until-settled, no time-based modal): the backend
+  // restores the keyring session asynchronously (instant on raw binary,
+  // seconds late on AppImage: cold WebKit/squashfs/keyring-unlock), so an
+  // early null must NEVER pop the login modal — it would flash then vanish.
+  // `get_session` is polled every 1s up to 15s instead: the first non-null
+  // session takes the logged-in path (the modal never opens) and the
+  // `session-changed` event settles immediately; the modal opens ONLY on
+  // sustained null past 15s. While waiting, the home shows a subtle
+  // non-modal hint (`Vérification de la session…`), never a modal. A
+  // genuinely logged-out user waits ≤15s with that honest hint.
+  var BOOT_POLL_MS = 1000;
+  var BOOT_POLL_MAX = 15;
   var bootAuthResolved = false;
-  var bootModalTimer = null;
+  var bootAuthPending = true;
+  var bootPollTimer = null;
+  var bootPollCount = 0;
+  // Génération de connexion : chaque `startLogin` et chaque `cancelLogin`
+  // l'incrémente ; les règlements tardifs de `poll_login` (promesse non
+  // annulable, ~15 min) dont la génération ne correspond plus sont IGNORÉS
+  // (ni toast, ni session). `bootLoginDismissed` tient l'armistice avec la
+  // barrière de démarrage : annuler une PREMIÈRE connexion ne doit pas voir
+  // la modale rouvrir ~1s plus tard sur le sustained-null ; les entrées
+  // manuelles (`startLogin`) l'effacent (l'utilisateur a changé d'avis).
+  var loginGen = 0;
+  var bootLoginDismissed = false;
   var lastStatus = null;
   var playBusy = false;
   var installBusy = false;
@@ -309,8 +394,10 @@
     openUrl(uri);
     var remaining = info.expires_in || 900;
     if (countdownTimer) clearInterval(countdownTimer);
+    var cdCached = $("device-countdown");
     function tick() {
-      var cd = $("device-countdown");
+      var cd = cdCached || $("device-countdown");
+      if (cd && !cdCached) cdCached = cd;
       var m = Math.floor(remaining / 60), s = remaining % 60;
       var label = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
       if (cd) cd.textContent = label;
@@ -336,21 +423,31 @@
 
   function startLogin() {
     if (!requireBackend()) return;
+    // Entrée manuelle (bouton Microsoft, Comptes, nouvel essai) :
+    // l'utilisateur a changé d'avis, fin de l'armistice de démarrage.
+    bootLoginDismissed = false;
+    loginGen += 1;
+    var myGen = loginGen;
+    var hadSession = !!sessionCached;
+    openLoginModal();
     var err0 = $("login-error");
     if (err0) err0.classList.add("hidden");
     var btn = $("btn-microsoft");
     if (btn) btn.disabled = true;
     invoke("request_login").then(function (info) {
+      if (myGen !== loginGen) return;
       if (btn) btn.disabled = false;
       showDevicePanel(info);
       invoke("poll_login").then(function (session) {
+        if (myGen !== loginGen) return;
         if (countdownTimer) clearInterval(countdownTimer);
         resetLoginModal();
         closeLoginModal();
         renderSession(session);
         refreshAccounts();
-        toast("Connecté : " + session.name + ".");
+        toast(hadSession ? "Compte ajouté : " + session.name + "." : "Connecté : " + session.name + ".");
       }, function (err) {
+        if (myGen !== loginGen) return;
         if (countdownTimer) clearInterval(countdownTimer);
         var el = $("device-error");
         if (el) {
@@ -361,6 +458,7 @@
         if (retry) retry.classList.remove("hidden");
       });
     }, function (err) {
+      if (myGen !== loginGen) return;
       if (btn) btn.disabled = false;
       if (isLoginRequired(err)) { openLoginModal(); return; }
       var el = $("login-error");
@@ -371,22 +469,65 @@
     });
   }
 
+  // Annulation : invalide les règlements `poll_login` en vol (garde de
+  // génération, sans toast ni session), efface le `pending_login` backend
+  // (pare-feu + garde, approbation tardive au téléphone sans effet),
+  // referme la modale. Connecté, ce n'est qu'une fermeture ; primo-connexion,
+  // l'armistice `bootLoginDismissed` tient la barrière de démarrage.
+  function cancelLogin() {
+    loginGen += 1;
+    if (countdownTimer) clearInterval(countdownTimer);
+    var btn = $("btn-microsoft");
+    if (btn) btn.disabled = false;
+    invoke("cancel_login").then(function () {}, function () {});
+    resetLoginModal();
+    closeLoginModal();
+    bootLoginDismissed = true;
+  }
+
   /* ---------- rendering (real backend fields only) ---------- */
 
   // Avatars go through the backend (`get_avatar`: disk-cached data URL,
   // never a remote <img>). A missing or failed avatar leaves the glyph
   // backdrop visible (no src attribute), never an empty square.
+  // Cache session des avatars par uuid : un seul `invoke` par uuid,
+  // jamais de `src` identique réécrit (les listes de comptes reconstruisent
+  // deux lignes par compte à chaque `refreshAccounts`).
+  var avatarUrlCache = {};
+  var avatarPending = {};
   function loadAvatar(img, uuid) {
     if (!img) return;
     var u = String(uuid || "").replace(/-/g, "");
     if (!/^[0-9a-f]{32}$/i.test(u)) {
       img.removeAttribute("src");
+      try { delete img.dataset.avatarUuid; } catch (e) {}
       return;
     }
+    var key = u.toLowerCase();
+    if (img.dataset.avatarUuid === key && img.hasAttribute("src")) return;
+    img.dataset.avatarUuid = key;
+    if (avatarUrlCache[key]) {
+      img.src = avatarUrlCache[key];
+      return;
+    }
+    if (avatarPending[key]) {
+      avatarPending[key].push(img);
+      return;
+    }
+    avatarPending[key] = [img];
     invoke("get_avatar", { uuid: uuid }).then(function (url) {
-      img.src = url;
+      avatarUrlCache[key] = url;
+      var waiters = avatarPending[key] || [];
+      delete avatarPending[key];
+      for (var i = 0; i < waiters.length; i++) {
+        if (waiters[i].dataset.avatarUuid === key) waiters[i].src = url;
+      }
     }, function () {
-      img.removeAttribute("src");
+      var waiters2 = avatarPending[key] || [];
+      delete avatarPending[key];
+      for (var j = 0; j < waiters2.length; j++) {
+        if (waiters2[j].dataset.avatarUuid === key) waiters2[j].removeAttribute("src");
+      }
     });
   }
 
@@ -414,12 +555,67 @@
     return wrap;
   }
 
+  function settleBootAuth() {
+    bootAuthPending = false;
+    if (bootPollTimer) { clearInterval(bootPollTimer); bootPollTimer = null; }
+  }
+
+  function setBootHint() {
+    var sl = $("status-line");
+    if (sl && !lastStatus) sl.textContent = "Vérification de la session…";
+    var sp = $("stat-player");
+    if (sp && !sessionCached) sp.textContent = "Vérification…";
+  }
+
+  // Poll-until-settled: every 1s up to 15s, the first non-null session wins
+  // (logged-in path, the modal never opens); sustained null past 15s opens
+  // the modal once. `session-changed` settles immediately (see listener).
+  function startBootAuthPoll() {
+    if (!HAS_TAURI) { settleBootAuth(); return; }
+    setBootHint();
+    if (bootPollTimer) return;
+    bootPollTimer = setInterval(function () {
+      if (!bootAuthPending) { settleBootAuth(); return; }
+      if (sessionCached || !HAS_TAURI) { settleBootAuth(); return; }
+      bootPollCount += 1;
+      if (bootPollCount >= BOOT_POLL_MAX) {
+          settleBootAuth();
+          bootAuthResolved = true;
+          if (!sessionCached && HAS_TAURI) {
+            invoke("get_session").then(function (s) {
+              if (s) { applySessionUpdate(s); return; }
+              var sp = $("stat-player");
+              if (sp) sp.textContent = "—";
+              setAvatar("avatar-top-img", null);
+              resetLoginModal();
+              // Armistice : une primo-connexion annulée ne rouvre pas.
+              if (!bootLoginDismissed) openLoginModal();
+            }, function () {
+              var sp2 = $("stat-player");
+              if (sp2) sp2.textContent = "—";
+              resetLoginModal();
+              if (!bootLoginDismissed) openLoginModal();
+            });
+          }
+        return;
+      }
+      invoke("get_session").then(function (s) {
+        if (!bootAuthPending) return;
+        if (s) { applySessionUpdate(s); }
+        else { setBootHint(); }
+      }, function () {});
+    }, BOOT_POLL_MS);
+  }
+
   function renderSession(session, force) {
     sessionCached = session || null;
     var chip = $("user-chip");
     if (session) {
+      settleBootAuth();
       bootAuthResolved = true;
-      if (bootModalTimer) { clearTimeout(bootModalTimer); bootModalTimer = null; }
+      // Une vraie session rend l'armistice sans objet (la barrière ne tire
+      // que sur sustained-null) : la prochaine déconnexion rouvrira la modale.
+      bootLoginDismissed = false;
       if (chip) chip.classList.remove("hidden");
       var nm = $("user-name");
       if (nm) nm.textContent = session.name;
@@ -435,21 +631,18 @@
         return;
       }
       if (chip) chip.classList.add("hidden");
+      if (bootAuthPending && !force) {
+        // Restore may still land: subtle non-modal hint only, never a modal.
+        setBootHint();
+        return;
+      }
       var sp2 = $("stat-player");
       if (sp2) sp2.textContent = "—";
       setAvatar("avatar-top-img", null);
-      if (bootAuthResolved) {
-        resetLoginModal();
-        openLoginModal();
-      } else if (!bootModalTimer) {
-        bootModalTimer = setTimeout(function () {
-          bootModalTimer = null;
-          bootAuthResolved = true;
-          if (!sessionCached && HAS_TAURI) {
-            invoke("get_session").then(renderSession, function () { renderSession(null); });
-          }
-        }, 2500);
-      }
+      resetLoginModal();
+      // Garde périmée + armistice : jamais de modale sur sustained-null
+      // après une annulation (sauf chemin explicite `force`).
+      if (!bootLoginDismissed || force) openLoginModal();
     }
   }
 
@@ -497,10 +690,8 @@
     var sl = $("status-line");
     if (sl) sl.textContent = FRIENDLY_STATUS[st.update_status] || st.detail || "—";
     updateHomeModLine();
-    var cdot = $("client-dot"), fdot = $("foot-dot");
-    var dotClass = st.maintenance_enabled ? "dot warn" : (st.update_status === "ok" ? "dot" : "dot warn");
+    var cdot = $("client-dot");
     if (cdot) cdot.className = st.maintenance_enabled ? "dot warn" : (st.update_status === "ok" ? "dot" : "dot warn");
-    if (fdot) fdot.className = dotClass;
     var banner = $("maintenance-banner");
     if (banner) {
       if (st.maintenance_enabled) {
@@ -527,7 +718,17 @@
 
   // Server mini-card (#server-ping, #server-tps, #server-online-tag/label).
   // TPS is never exposed by the Server List Ping: #server-tps always shows
-  // "—" with an explanatory tooltip, never a fake 20.0.
+  // "—" with an explanatory tooltip, never a fake 20.0. The status label is
+  // exactly "En ligne" / "Hors ligne" (never a long sentence that reflows
+  // the card — full detail lives in the `title` tooltip only, the label is
+  // truncated with ellipsis in CSS). Ping/TPS numbers are untouched.
+  // Change-detection: the 30s poll skips identical states (stable fields by
+  // signature, ping only when its text changed).
+  var lastServerStableSig = null;
+  var lastServerPingText = null;
+  function serverStableSig(s) {
+    return [s.online ? "1" : "0", s.version || "", s.players_online, s.players_max, s.motd || "", s.error || "", s.address || ""].join("|");
+  }
   function renderServerStatus(s) {
     var tps = $("server-tps");
     if (tps) {
@@ -536,22 +737,31 @@
     }
     var serverPing = $("server-ping"), tag = $("server-online-tag"), label = $("server-online-label");
     if (!s) return;
+    var pingText = (s.online && s.ping_ms != null) ? (s.ping_ms + " ms") : "—";
+    if (pingText !== lastServerPingText) {
+      lastServerPingText = pingText;
+      if (serverPing) serverPing.textContent = pingText;
+    }
+    var sig = serverStableSig(s);
+    if (sig === lastServerStableSig) return;
+    lastServerStableSig = sig;
     if (s.online) {
-      var ping = (s.ping_ms != null) ? (s.ping_ms + " ms") : "—";
-      if (serverPing) serverPing.textContent = ping;
-      if (label) label.textContent = "En ligne" + (s.version ? (" • " + s.version) : "");
+      if (label) label.textContent = "En ligne";
       if (tag) {
         tag.style.color = "";
-        tag.title = (s.motd || "") + (s.address ? (" — " + s.address) : "");
+        var bits = [];
+        if (s.version) bits.push(s.version);
+        if (s.players_online != null && s.players_max != null) bits.push(s.players_online + "/" + s.players_max + " joueurs");
+        if (s.motd) bits.push(s.motd);
+        if (s.address) bits.push(s.address);
+        tag.title = bits.join(" — ");
         var d = tag.querySelector(".dot");
         if (d) d.className = "dot";
       }
     } else {
-      if (serverPing) serverPing.textContent = "—";
-      var msg = (typeof s.error === "string" && s.error) ? s.error : "Serveur hors ligne.";
-      if (label) label.textContent = msg;
+      if (label) label.textContent = "Hors ligne";
       if (tag) {
-        tag.title = s.address || "";
+        tag.title = (typeof s.error === "string" && s.error) ? s.error : (s.address || "");
         var d2 = tag.querySelector(".dot");
         if (d2) d2.className = "dot off";
       }
@@ -566,8 +776,18 @@
     });
   }
 
-  function fetchServerStatus() {
+  // Fraîcheur anti-gaspillage : les revisites d'onglet et le retour de
+  // fenêtre refont la même demande alors que le sondage 30s vient de passer.
+  var lastServerFetchAt = 0;
+  var SERVER_FRESH_MS = 20000;
+  function fetchServerStatus(force) {
     if (!HAS_TAURI) return;
+    // Diète RAM : aucun sondage planifié en fenêtre cachée (`force` = boot,
+    // retour visible, onglet Accueil : passe toujours).
+    if (!force && document.hidden) return;
+    var now = Date.now();
+    if (!force && (now - lastServerFetchAt) < SERVER_FRESH_MS) return;
+    lastServerFetchAt = now;
     invoke("get_server_status").then(renderServerStatus, renderServerStatusError);
   }
 
@@ -598,9 +818,25 @@
 
   var KIND_LABELS = { major: "Majeur", hotfix: "Hotfix", info: "Info" };
 
+  // Carte compacte (maquette : badge + repo/date à droite, titre, lien
+  // court). Le corps brut (URL de commit de ~60 caractères) ne touche
+  // jamais le DOM : seule la première URL est extraite et rendue comme lien
+  // court `abcdef1 →` (SHA 7 caractères vers le commit) ; sans URL, un
+  // extrait d'une ligne. Jamais d'URL brute.
+  function patchCommitUrl(n) {
+    var body = (n && n.body) || "";
+    var m = body.match(/https?:\/\/\S+/);
+    return m ? m[0].replace(/[),.\]]+$/, "") : "";
+  }
+
+  function patchShortSha(url) {
+    var seg = (url.split("?")[0].split("#")[0].split("/").pop() || "").replace(/[^0-9a-f]/gi, "");
+    return seg.slice(0, 7);
+  }
+
   function patchCard(n) {
     var card = document.createElement("div");
-    card.className = "card patch-card";
+    card.className = "card patch-card patch-compact";
     var top = document.createElement("div");
     top.className = "patch-top";
     var badge = document.createElement("span");
@@ -613,15 +849,32 @@
     var verText = (n && n.version) || "";
     if (n && n.date) verText += (verText ? " • " : "") + n.date;
     ver.textContent = verText || "—";
+    ver.title = verText || "";
     top.appendChild(ver);
     card.appendChild(top);
     var title = document.createElement("h3");
     title.textContent = (n && n.title) || "Sans titre";
+    title.title = (n && n.title) || "";
     card.appendChild(title);
-    var body = document.createElement("p");
-    body.style.whiteSpace = "pre-wrap";
-    body.textContent = (n && n.body) || "";
-    card.appendChild(body);
+    var url = patchCommitUrl(n);
+    if (url) {
+      var sha = patchShortSha(url);
+      var link = document.createElement("a");
+      link.className = "patch-link";
+      link.href = url;
+      link.textContent = (sha || "commit") + " →";
+      link.title = url;
+      link.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        openUrl(url);
+      });
+      card.appendChild(link);
+    } else {
+      var snippet = document.createElement("p");
+      snippet.className = "patch-snippet";
+      snippet.textContent = ((n && n.body) || "").split("\n")[0] || "—";
+      card.appendChild(snippet);
+    }
     return card;
   }
 
@@ -637,22 +890,83 @@
     return card;
   }
 
-  function renderPatchNotes(notes) {
+  // Les notes sont re-demandées à chaque affichage de l'accueil : on ne
+  // reconstruit le DOM que si le contenu a vraiment changé. L'accueil
+  // montre 3 cartes compactes ; « Historique complet » déplie les 5 (même
+  // traitement lien court, jamais d'URL brute).
+  // Indice d'échec total du fetch distant : ligne atténuée sous le titre
+  // (jamais de toast) ; le succès efface, l'échec affiche, le chargement
+  // garde l'état précédent (pas de scintillement).
+  var PATCH_UNREACHABLE_HINT = "Notes injoignables — vérifiez la connexion.";
+
+  function renderPatchNotesSubtitle(unreachable) {
+    var sub = $("patch-notes-subtitle");
+    if (!sub) return;
+    sub.textContent = unreachable ? PATCH_UNREACHABLE_HINT : "";
+  }
+
+  var lastPatchNotesSig = null;
+  var lastPatchNotesCache = [];
+  var lastPatchNotesUnreachable = false;
+  var patchExpanded = false;
+  // Signature légère sans `JSON.stringify` du corps complet : les champs
+  // rendus + longueur du corps + URL courte suffisent à détecter un contenu
+  // identique (les corps lointains ne sont jamais affichés).
+  function patchNotesSig(notes, expanded, unreachable) {
+    var parts = [(expanded ? "x" : "c"), (unreachable ? "u1" : "u0"), "n" + notes.length];
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i] || {};
+      var body = n.body || "";
+      parts.push([n.version || "", n.kind || "", n.date || "", n.title || "", body.length, patchCommitUrl(n)].join("~"));
+    }
+    return parts.join("|");
+  }
+  function renderPatchNotes(feed) {
+    var notes = Array.isArray(feed) ? feed : ((feed && feed.notes) || []);
+    var unreachable = Array.isArray(feed) ? lastPatchNotesUnreachable : !!(feed && feed.unreachable);
+    lastPatchNotesUnreachable = unreachable;
+    lastPatchNotesCache = notes || [];
+    var want = patchExpanded ? 5 : 3;
+    var sig = patchNotesSig(lastPatchNotesCache, patchExpanded, unreachable);
+    if (sig === lastPatchNotesSig) return;
+    lastPatchNotesSig = sig;
+    renderPatchNotesSubtitle(unreachable);
     var box = $("patch-notes");
     if (!box) return;
     box.innerHTML = "";
-    var list = notes || [];
+    var list = lastPatchNotesCache;
     if (list.length === 0) {
       box.appendChild(patchMessageCard("Aucune note", "Les notes de patch seront affichées ici dès qu'elles seront disponibles."));
       return;
     }
-    for (var i = 0; i < Math.min(list.length, 5); i++) {
+    for (var i = 0; i < Math.min(list.length, want); i++) {
       box.appendChild(patchCard(list[i]));
     }
   }
 
-  function fetchPatchNotes() {
+  // Boîte « vide » = rien, ou seulement la carte `Chargement…` (carte
+  // statique du premier affichage ou d'un fetch en cours, marquée
+  // `patch-loading`) : les cartes rendues, la carte d'erreur et la carte
+  // « Aucune note » sont du contenu à garder, jamais à écraser.
+  function patchBoxIsEmpty(box) {
+    if (!box) return true;
+    var kids = box.children;
+    if (kids.length === 0) return true;
+    for (var i = 0; i < kids.length; i++) {
+      if (!kids[i].classList.contains("patch-loading")) return false;
+    }
+    return true;
+  }
+
+  var lastPatchFetchAt = 0;
+  var PATCH_FRESH_MS = 60000;
+  function fetchPatchNotes(force) {
+    // Diète RAM : aucun refetch planifié en fenêtre cachée (`force` = boot,
+    // retour visible, onglet Accueil : passe toujours) ; le retour visible
+    // refetche déjà via `visibilitychange`.
+    if (!force && document.hidden) return;
     var box = $("patch-notes");
+    if (!force && (Date.now() - lastPatchFetchAt) < PATCH_FRESH_MS && !patchBoxIsEmpty(box)) return;
     if (!HAS_TAURI) {
       if (box) {
         box.innerHTML = "";
@@ -660,13 +974,25 @@
       }
       return;
     }
-    if (box) {
+    // Ne jamais détruire un contenu affiché pour un fetch incertain : la
+    // carte `Chargement…` n'est dessinée que sur une boîte vide. La garde
+    // de signature de `renderPatchNotes` ignore les flux identiques —
+    // écraser les cartes avant un flux identique (le cas du cache au retour
+    // sur l'accueil) laissait `Chargement…` pour toujours.
+    if (box && patchBoxIsEmpty(box)) {
       box.innerHTML = "";
-      box.appendChild(patchMessageCard("Chargement…", "Récupération des notes de patch…"));
+      var loading = patchMessageCard("Chargement…", "Récupération des notes de patch…");
+      loading.classList.add("patch-loading");
+      box.appendChild(loading);
     }
+    lastPatchFetchAt = Date.now();
     invoke("get_patch_notes").then(renderPatchNotes, function (err) {
+      renderPatchNotesSubtitle(true);
       var box2 = $("patch-notes");
       if (!box2) return;
+      // Échec : garder le contenu périmé affiché ; la carte d'erreur ne
+      // remplace qu'une boîte vide (dont la carte `Chargement…`).
+      if (!patchBoxIsEmpty(box2)) return;
       box2.innerHTML = "";
       box2.appendChild(patchMessageCard(
         "Notes injoignables",
@@ -846,14 +1172,15 @@
      le premier signal, le sondage rejoue silencieusement (aucun toast) les
      lignes manquées via le même `glog` (dédupliquées par curseur, bornées
      par le cap existant). Sondé uniquement quand c'est utile : jeu en cours
-     OU onglet Console visible. */
+     OU onglet Console visible. SANS garde `document.hidden` : le jeu tourne
+     fenêtre cachée, et le journal doit être complet au retour. */
   var consoleTailCursor = 0;
   function isConsoleVisible() {
     var t = $("tab-console");
     return !!(t && !t.classList.contains("hidden"));
   }
   function pollConsoleTail() {
-    if (!HAS_TAURI || document.hidden) return;
+    if (!HAS_TAURI) return;
     if (!gameRunning && !isConsoleVisible()) return;
     invoke("get_console_tail", { since: consoleTailCursor }).then(function (t) {
       if (!t) return;
@@ -991,7 +1318,14 @@
     installSpeedAnchor = { b: bytes, t: now };
   }
 
+  // Garde-fou de signature au rendu (pas seulement au sondage) : le même
+  // payload livré deux fois (événement + sondage 500 ms) n'écrit dans le
+  // DOM qu'une fois.
+  var lastRenderProgressSig = null;
   function renderProgress(p) {
+    var sig = installProgressSig(p);
+    if (sig === lastRenderProgressSig) return;
+    lastRenderProgressSig = sig;
     var pct = Math.round((p.fraction || 0) * 100);
     var bar = $("install-bar"), det = $("install-detail");
     if (bar) bar.style.width = pct + "%";
@@ -1411,16 +1745,35 @@
 
   // Loading state -> real list -> counts from `modsCache.length`. Errors show
   // the backend message, never placeholder rows.
-  function refreshMods() {
+  // Revisite d'onglet sans refetch quand les données sont fraîches ;
+  // `applyModsFilter` réaffiche le cache (garde de signature ci-dessous).
+  var lastModsFetchAt = 0;
+  var MODS_FRESH_MS = 15000;
+  var lastModsRenderSig = null;
+  function modsRenderSig(q) {
+    var parts = [modsFilter, q, "n" + modsCache.length];
+    for (var i = 0; i < modsCache.length; i++) {
+      var m = modsCache[i] || {};
+      parts.push([m.id || "", m.enabled ? "1" : "0", m.required ? "1" : "0", m.version || "", m.size || 0, m.display_name || "", m.file_name || ""].join("~"));
+    }
+    return parts.join("|");
+  }
+  function refreshMods(force) {
     if (!HAS_TAURI) { showNoBackendMode(); return; }
+    if (!force && (Date.now() - lastModsFetchAt) < MODS_FRESH_MS && modsCache.length) {
+      applyModsFilter();
+      return;
+    }
     var sub = $("mods-subtitle");
     if (sub) sub.textContent = "Chargement des mods…";
+    lastModsFetchAt = Date.now();
     invoke("get_mods_list").then(function (mods) {
       modsCache = mods || [];
       applyModsFilter();
       updateHomeModLine();
     }, function (err) {
       modsCache = [];
+      lastModsRenderSig = null;
       var list = $("mods-list");
       if (list) list.innerHTML = "";
       if (sub) sub.textContent = typeof err === "string" ? err : "Mods injoignables.";
@@ -1443,6 +1796,9 @@
     var q = "";
     var search = $("mods-search");
     if (search) q = (search.value || "").toLowerCase().trim();
+    var rsig = modsRenderSig(q);
+    if (rsig === lastModsRenderSig) return;
+    lastModsRenderSig = rsig;
     var counts = { all: modsCache.length, required: 0, optional: 0, disabled: 0 };
     modsCache.forEach(function (m) {
       if (m.required) counts.required += 1;
@@ -1556,7 +1912,7 @@
           btn.disabled = true;
           invoke("toggle_mod", { id: mod.id, enabled: want }).then(function () {
             toast((want ? "Activé : " : "Désactivé : ") + mod.id);
-            refreshMods();
+            refreshMods(true);
           }, function (err) {
             btn.disabled = false;
             toast(typeof err === "string" ? err : "Échec du changement d'état.");
@@ -1941,11 +2297,24 @@
   function refreshAll() {
     if (!HAS_TAURI) { showNoBackendMode(); return; }
     invoke("get_session").then(function (s) {
-      bootAuthResolved = true;
-      renderSession(s);
+      if (s) {
+        settleBootAuth();
+        bootAuthResolved = true;
+        renderSession(s);
+      } else if (bootAuthPending) {
+        // Restore may still land: the boot poll owns the verdict, stay quiet.
+        renderSession(null);
+      } else {
+        bootAuthResolved = true;
+        renderSession(null);
+      }
     }, function () {
-      bootAuthResolved = true;
-      renderSession(null);
+      if (bootAuthPending) {
+        renderSession(null);
+      } else {
+        bootAuthResolved = true;
+        renderSession(null);
+      }
     });
     invoke("get_manifest_status").then(renderStatus, function (err) {
       var sl = $("status-line");
@@ -1959,13 +2328,25 @@
       toast(typeof err === "string" ? err : "Réglages injoignables.");
     });
     fetchBootNotices();
-    fetchJavaStatus();
-    fetchJavaRuntimes();
-    fetchSystemMemory();
-    refreshMods();
+    // Différées après le premier affichage (audit du fan-out de démarrage) :
+    // les sondes `java -version` (3 spawns : statut + 2 runtimes) et la RAM
+    // système ne servent qu'à l'onglet Java / au pied de page, masqués au
+    // boot — rien ne les attend pour peindre l'accueil. Gardées au premier
+    // affichage : session/manifest/réglages (mémoire, instantanés), mods
+    // (la ligne « N mods » de l'accueil vient du nombre renvoyé), serveur
+    // (la carte serveur), notes de patch (la colonne). Le fan-out reste
+    // concurrent (aucun `await` en chaîne) ; seul le lent interne —
+    // notes de patch séquentielles — est parallélisé côté backend.
+    setTimeout(function () {
+      if (!HAS_TAURI) return;
+      fetchJavaStatus();
+      fetchJavaRuntimes();
+      fetchSystemMemory();
+    }, 1500);
+    refreshMods(true);
     refreshAccounts();
-    fetchServerStatus();
-    fetchPatchNotes();
+    fetchServerStatus(true);
+    fetchPatchNotes(true);
     fetchLauncherVersion();
     fetchBuildInfo();
   }
@@ -2099,7 +2480,12 @@
 
   /* ---------- wiring ---------- */
 
+  // Garde anti-double-armorçage : si l'init s'exécutait deux fois, les
+  // `setInterval` s'empileraient (sondages en double + réveils en double).
+  var booted = false;
   document.addEventListener("DOMContentLoaded", function () {
+    if (booted) return;
+    booted = true;
     var items = document.querySelectorAll(".nav-item");
     for (var i = 0; i < items.length; i++) {
       (function (t) {
@@ -2307,6 +2693,8 @@
     });
 
     on("btn-microsoft", "click", startLogin);
+    on("btn-cancel-login", "click", cancelLogin);
+    on("btn-cancel-login-device", "click", cancelLogin);
     on("user-chip", "click", function (ev) {
       ev.stopPropagation();
       toggleAccountMenu();
@@ -2318,13 +2706,14 @@
     });
 
     on("btn-cancel-install", "click", doCancelInstall);
-    on("console-autoscroll", "change", function () { scrollPinnedLogs(); });
     on("btn-clear-gamelog", "click", clearGameLog);
     on("btn-clear-log", "click", function () {
+      installLogQueue.length = 0;
       var el = $("install-log");
       if (el) {
         el.textContent = LOG_PLACEHOLDER;
         el.scrollTop = 0;
+        installLogCount = 0;
       }
     });
     on("btn-open-folder", "click", function () {
@@ -2347,7 +2736,11 @@
       }
     });
     on("btn-changelog", "click", function () {
-      openUrl("https://46anarchy.fr/");
+      patchExpanded = !patchExpanded;
+      var b = $("btn-changelog");
+      if (b) b.textContent = patchExpanded ? "Réduire" : "Historique complet →";
+      lastPatchNotesSig = null;
+      renderPatchNotes(lastPatchNotesCache);
     });
 
     on("btn-retry-login", "click", function () {
@@ -2374,7 +2767,7 @@
       tauriEvent.listen("install-progress", function (e) { renderProgress(e.payload); });
       tauriEvent.listen("console-line", function (e) { glog(e.payload); });
       tauriEvent.listen("game-outcome", function (e) { handleGameOutcome(e.payload); });
-      tauriEvent.listen("session-changed", function (e) { applySessionUpdate(e.payload); });
+      tauriEvent.listen("session-changed", function (e) { settleBootAuth(); applySessionUpdate(e.payload); });
     }
 
     on("btn-dismiss-demo", "click", function () {
@@ -2388,6 +2781,7 @@
     }
     switchTab("home");
     refreshAll();
+    startBootAuthPoll();
     autoRefreshManifest();
     setInterval(function () {
       if (HAS_TAURI && !document.hidden) fetchServerStatus();

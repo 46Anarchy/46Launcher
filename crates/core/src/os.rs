@@ -84,16 +84,22 @@ impl Os {
     /// Signal de repli quand le champ `os` du modèle est vide : le
     /// manifeste utilise les deux conventions en parallèle.
     pub fn from_model_suffix(name: &str) -> Option<Self> {
-        let lower = name.to_ascii_lowercase();
-        if lower.ends_with("-windows") || lower == "windows" {
+        // Sans allocation : comparaisons ASCII insensibles à la casse
+        // (appelé une fois par fichier et par plan — ~500× par JOUER).
+        let b = name.as_bytes();
+        fn ends_with_ci(hay: &[u8], needle: &[u8]) -> bool {
+            hay.len() >= needle.len()
+                && hay[hay.len() - needle.len()..].eq_ignore_ascii_case(needle)
+        }
+        if ends_with_ci(b, b"-windows") || name.eq_ignore_ascii_case("windows") {
             Some(Self::Windows)
-        } else if lower.ends_with("-macos")
-            || lower.ends_with("-osx")
-            || lower.ends_with("-mac")
-            || lower == "macos"
+        } else if ends_with_ci(b, b"-macos")
+            || ends_with_ci(b, b"-osx")
+            || ends_with_ci(b, b"-mac")
+            || name.eq_ignore_ascii_case("macos")
         {
             Some(Self::Macos)
-        } else if lower.ends_with("-linux") || lower == "linux" {
+        } else if ends_with_ci(b, b"-linux") || name.eq_ignore_ascii_case("linux") {
             Some(Self::Linux)
         } else {
             None
@@ -147,6 +153,21 @@ mod tests {
         assert_eq!(Os::from_consts_str("linux"), Os::Linux);
         // Unknown unix-likes fall back to the linux payloads.
         assert_eq!(Os::from_consts_str("freebsd"), Os::Linux);
+    }
+
+    #[test]
+    fn model_suffix_match_is_case_insensitive_without_alloc() {
+        // Garde anti-régression : même verdicts que l'ancienne forme
+        // `to_ascii_lowercase()`, sans allocation par appel.
+        assert_eq!(
+            Os::from_model_suffix("libraries-WINDOWS"),
+            Some(Os::Windows)
+        );
+        assert_eq!(Os::from_model_suffix("natives-MacOS"), Some(Os::Macos));
+        assert_eq!(Os::from_model_suffix("java-OSX"), Some(Os::Macos));
+        assert_eq!(Os::from_model_suffix("natives-MAC"), Some(Os::Macos));
+        assert_eq!(Os::from_model_suffix("java-LINUX"), Some(Os::Linux));
+        assert_eq!(Os::from_model_suffix("mods"), None);
     }
 
     #[test]

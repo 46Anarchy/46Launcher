@@ -16,6 +16,19 @@ pub mod commands;
 pub mod patch_notes;
 pub mod server_status;
 pub mod state;
+
+/// Journal de routine derrière `LAUNCHER_VERBOSE` (voir
+/// [`state::verbose_logging_enabled`]) : quand désactivé, ni les arguments
+/// ni le formatage ne sont évalués (coût nul). Les erreurs, les plantages
+/// et les états anormaux utilisent toujours `eprintln!` directement.
+#[macro_export]
+macro_rules! log_verbose {
+    ($($arg:tt)*) => {
+        if $crate::state::verbose_logging_enabled() {
+            eprintln!($($arg)*);
+        }
+    };
+}
 #[cfg(feature = "tauri-backend")]
 pub mod tauri_app;
 

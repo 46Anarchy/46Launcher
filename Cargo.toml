@@ -46,3 +46,10 @@ depends = "ca-certificates"
 # cargo-dist: no installers enabled yet (add "shell"/"powershell" or
 # "deb" targets here once release artifacts are defined).
 installers = []
+
+[profile.release]
+opt-level = 3          # Maximum speed optimizations
+lto = "fat"            # Full cross-crate link-time optimization
+codegen-units = 1      # Force single codegen unit to maximize LTO and minimize size
+panic = "abort"        # Disable unwinding bloat to cut binary size and boost speed
+strip = true           # Automatically strip debug symbols from the final binary

@@ -11,10 +11,84 @@ offline mode: login with a Microsoft account is mandatory.
 ## Features
 
 - **Microsoft auth (device-code flow):** MSA → Xbox Live → XSTS →
-  `login_with_xbox` → entitlements check → profile. Only the MSA
-  `refresh_token` is persisted (OS keyring, service `fr.46anarchy.launcher`,
-  one entry per account UUID); the Minecraft `access_token` stays in memory.
-  Sessions older than ~20h are refreshed silently before launch.
+   `login_with_xbox` → entitlements check → profile. Only the MSA
+   `refresh_token` is persisted (OS keyring, service `fr.46anarchy.launcher`,
+   one entry per account UUID); the Minecraft `access_token` stays in memory.
+   Sessions older than ~20h are refreshed silently before launch.
+
+## Install
+
+One-liner (Linux):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash
+```
+
+`install.sh` detects the distro from `/etc/os-release`, fetches the latest
+GitHub release, and installs the matching bundle. Only `curl` is required
+(`sudo` when not root, for system packages).
+
+| Distro family | Bundle installed | Method |
+| --- | --- | --- |
+| Debian, Ubuntu, Linux Mint, Pop!_OS, elementary OS, Zorin OS, Kali, Raspbian | `.deb` | `apt-get install` (fallback `dpkg -i`) |
+| Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux | `.rpm` | `dnf install` (fallback `rpm -Uvh`) |
+| Arch, Manjaro, Garuda, EndeavourOS, openSUSE, anything else | `.AppImage` | copied to `~/.local/bin/46anarchy.AppImage` with a desktop entry and icon, no root needed |
+
+Preview without changing anything:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash -s -- --dry-run
+```
+
+`GITHUB_REPO` overrides the release source, `GITHUB_TOKEN` is honored for
+GitHub API rate limits, and `INSTALL_BIN_DIR` / `APP_DIR` override the
+AppImage install paths (see the script header).
+
+Manual alternative: download the `.deb`, `.rpm`, or `.AppImage` from
+[Releases](https://github.com/46Anarchy/46Launcher/releases), then:
+
+```sh
+sudo apt-get install ./46anarchy_*.deb   # Debian/Ubuntu family
+sudo dnf install ./46anarchy-*.rpm       # Fedora/RHEL family
+chmod +x ./46Anarchy_*.AppImage          # anywhere: portable, no install step
+```
+
+The `.deb`/`.rpm` bundles ship their own `.desktop` entry; the `.AppImage`
+does not (the installer script writes one for you).
+
+Linux x86-64 builds come in two microarch variants: `baseline` (default
+CPU target, runs anywhere) and `x86-64-v3` (AVX/AVX2/BMI1-2/FMA/LZCNT/
+MOVBE/OSXSAVE — Intel Haswell (2013+) / AMD Excavator, Zen+ and newer —
+faster number-crunching, refuses to boot on older CPUs). Release assets
+carry a `-v3` infix before the arch
+(`46Anarchy_0.1.0_amd64-v3.AppImage`, `..._amd64-v3.deb`,
+`46Anarchy-0.1.0-1.x86_64-v3.rpm`); unmarked files are the baseline.
+`install.sh` auto-picks: v3 when the first `flags` line of
+`/proc/cpuinfo` contains every required flag, else baseline (non-x86_64
+is always baseline), preferring the `-v3` asset and falling back to the
+baseline one when a release has none. Override with
+`ARCH_VARIANT=v3|baseline|auto` (default `auto`); `--dry-run` prints the
+detected flags and the decision.
+
+Uninstall:
+
+```sh
+sudo apt-get remove 46anarchy   # .deb
+sudo dnf remove 46anarchy       # .rpm
+# .AppImage: delete ~/.local/bin/46anarchy.AppImage,
+# ~/.local/share/applications/46anarchy.desktop, and the
+# ~/.local/share/icons/hicolor/512x512/apps/46anarchy.png icon.
+```
+
+Game data under `~/.46anarchy` is left behind by all of the above; delete it
+manually for a full wipe.
+
+### macOS
+
+The `.icns` icon is baked into the `.app` bundle by Tauri at build time:
+there is nothing to do manually. Open the `.dmg` from Releases, drag
+46Anarchy into `/Applications`, and the icon appears automatically. For
+unsigned builds, right-click → Open on first launch (Gatekeeper).
 - **Multi-account:** connected accounts form a roster (UUID + name, no
   secrets) with an active-account pointer; switching a roster-only account
   refreshes its token on demand. Dead tokens quarantine the account
@@ -187,6 +261,10 @@ Public core API (see `crates/core/src/lib.rs`): `default_game_dir`,
   per-OS bundles via `tauri-apps/tauri-action@v0` (`ubuntu-22.04`:
   deb/appimage/rpm; `windows-latest`: nsis/msi; `macos-latest`: dmg) and
   attaches them to a **draft** GitHub Release for manual review and publish.
+  Linux additionally builds an `x86-64-v3` variant
+  (`RUSTFLAGS="-C target-cpu=x86-64-v3"`, post-build `-v3` rename) attached
+  to the same draft; both share the untouched `[profile.release]`
+  LTO/strip setup.
 - **Secrets** (all optional): the release job reads them from a **`release`
   environment** (repo Settings → Environments), never as plain repository
   secrets: `PRISM_MSA_CLIENT_ID` (testing Azure id baked into release
@@ -221,6 +299,19 @@ Public core API (see `crates/core/src/lib.rs`): `default_game_dir`,
   per account UUID). Fixed endpoints: manifest
   `https://cdn.46anarchy.fr/manifest.json`, server status
   `mc.46anarchy.fr:25566`.
+
+## Troubleshooting
+
+- **Blank window on NVIDIA / llvmpipe:** run with
+  `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`. It forces the WebKit renderer through
+  shared-memory instead of DMA-BUF (display-only fallback, no RAM saving).
+- Deliberately not recommended for RAM (one line each): `JavaScriptCoreUseJIT=0`
+  kills the JS JIT the UI polls/renders on — slower wakeups for a negligible
+  code-cache saving; `Malloc=1`-style allocator overrides impose no ceiling,
+  only fragmentation risk; sandbox disables (e.g.
+  `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`) drop process isolation for zero
+  RAM; `ulimit` memory caps crash the renderer instead of trimming usage —
+  a crash, not a diet.
 
 ## License
 

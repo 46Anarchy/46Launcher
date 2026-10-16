@@ -342,8 +342,7 @@ fn strip_top_level(entry: &Path) -> Option<PathBuf> {
     {
         return None;
     }
-    let mut rel = PathBuf::new();
-    let mut parts = entry
+    let mut parts: Vec<&std::ffi::OsStr> = entry
         .components()
         .filter_map(|c| match c {
             std::path::Component::Normal(p) => Some(p),
@@ -354,9 +353,19 @@ fn strip_top_level(entry: &Path) -> Option<PathBuf> {
         })
         // First normal component is the top-level folder: drop it.
         .skip(1)
-        .peekable();
+        .collect();
+    // macOS archives (Temurin + GraalVM tarballs) nest the payload one
+    // level deeper (`<top>/Contents/Home/bin/java`): drop that prefix so
+    // `bin/java` lands at the expected depth on every OS. Linux/Windows
+    // archives never carry it, so they are unaffected.
+    if parts.len() >= 2 && parts[0] == "Contents" && parts[1] == "Home" {
+        parts.drain(..2);
+    }
     // Top-level entry itself or a `.`-only path: nothing to install.
-    parts.peek()?;
+    if parts.is_empty() {
+        return None;
+    }
+    let mut rel = PathBuf::new();
     // `..` cannot appear here (filtered above), but belt-and-braces: the
     // caller joins this onto the destination, so never emit ParentDir.
     for part in parts {
@@ -799,6 +808,25 @@ mod tests {
         // Absolute paths and escapes are refused.
         assert_eq!(strip_top_level(Path::new("/etc/passwd")), None);
         assert_eq!(strip_top_level(Path::new("top/../../evil")), None);
+        // macOS archives: `Contents/Home` nesting is flattened so the
+        // provisioned `bin/java` matches `bundled_java_bin` on every OS.
+        assert_eq!(
+            strip_top_level(Path::new("jdk8u392-b08-jre/Contents/Home/bin/java")),
+            Some(PathBuf::from("bin/java"))
+        );
+        assert_eq!(
+            strip_top_level(Path::new(
+                "graalvm-jdk-21/Contents/Home/lib/server/libjvm.dylib"
+            )),
+            Some(PathBuf::from("lib/server/libjvm.dylib"))
+        );
+        // A bare `Contents/Home` top level (without payload) installs nothing.
+        assert_eq!(strip_top_level(Path::new("top/Contents/Home")), None);
+        // A `Contents` dir that is NOT followed by `Home` is kept verbatim.
+        assert_eq!(
+            strip_top_level(Path::new("top/Contents/Info.plist")),
+            Some(PathBuf::from("Contents/Info.plist"))
+        );
     }
 
     fn sample_zip_bytes() -> Vec<u8> {

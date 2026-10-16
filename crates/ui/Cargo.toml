@@ -29,15 +29,28 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # (used by the src-tauri harness) for `cargo tauri dev` / `cargo tauri build`.
 # NOTE: Tauri v2 has no `api-all` feature (that was v1); default features suffice.
 tauri = { version = "2", optional = true }
+# Direct per-view WebKit settings (see `tauri_app::apply_webkit_ram_settings`).
+# Linux-only + optional (only with `tauri-backend`) so portable builds and
+# non-Linux targets link nothing extra. Pinned `=2.0.2` with `v2_38`: exactly
+# what wry 0.57 requires (see vendored wry-0.57.0 `Cargo.toml`) — any other
+# webkit2gtk would duplicate the `WebView` type and break
+# `PlatformWebview::inner()`.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "=2.0.2", features = ["v2_38"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
 
 # Build script dependency for `generate_context!` (feature-gated like the
 # `tauri_app` module, so plain `cargo build` / `cargo test` stay portable).
+# `minifier` + `html-minifier` are pure-Rust, offline-friendly (via cargo
+# like everything else, no npm) and only *run* on `PROFILE=release`
+# (see `minify_frontend_for_release` in build.rs).
 [build-dependencies]
 tauri-build = { version = "2", optional = true }
+minifier = "=0.3.6"
+html-minifier = "=5.0.2"
 
 [features]
 default = []
-tauri-backend = ["dep:tauri", "dep:tauri-build"]
+tauri-backend = ["dep:tauri", "dep:tauri-build", "dep:webkit2gtk"]

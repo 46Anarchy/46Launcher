@@ -23,3 +23,12 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 launcher-ui = { path = "../crates/ui", features = ["tauri-backend"] }
+
+# Mirrors the workspace root release profile (this harness is excluded from
+# the workspace, so `cargo tauri build` would otherwise use stock settings).
+[profile.release]
+opt-level = 3          # Maximum speed optimizations
+lto = "fat"            # Full cross-crate link-time optimization
+codegen-units = 1      # Force single codegen unit to maximize LTO and minimize size
+panic = "abort"        # Disable unwinding bloat to cut binary size and boost speed
+strip = true           # Automatically strip debug symbols from the final binary

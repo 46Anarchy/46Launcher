@@ -57,6 +57,35 @@ pub fn is_login_required_error(e: &str) -> bool {
     e.starts_with(LOGIN_REQUIRED_CODE)
 }
 
+/// Nom de la variable d'environnement activant les journaux de routine
+/// (lignes avatar, frontières de phases d'installation, verdicts
+/// `running`/`exited-0`, restauration de session réussie…).
+pub const VERBOSE_ENV_VAR: &str = "LAUNCHER_VERBOSE";
+
+/// Millisecondes murales (horodatage bon marché des lignes de démarrage :
+/// un appel système par ligne, aucune allocation — même horloge que les
+/// journaux de phases d'installation).
+pub fn boot_wall_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+/// `true` quand les journaux de routine sont activés (`LAUNCHER_VERBOSE`
+/// définie, non vide et différente de `"0"`). Résolu une seule fois par
+/// processus : quand désactivé, chaque appel se réduit à une lecture
+/// atomique (coût nul — ni formatage ni appel système). Les erreurs, les
+/// plantages et les états anormaux s'impriment toujours, hors de ce gate.
+pub fn verbose_logging_enabled() -> bool {
+    static CACHED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CACHED.get_or_init(|| {
+        std::env::var_os(VERBOSE_ENV_VAR)
+            .and_then(|v| v.into_string().ok())
+            .is_some_and(|s| !s.trim().is_empty() && s.trim() != "0")
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Pack flavor gate (experimental branch)
 // ---------------------------------------------------------------------------
@@ -764,6 +793,18 @@ pub struct PatchNoteDto {
     pub kind: String,
 }
 
+/// Patch-notes feed + reachability verdict for the home screen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PatchNotesFeedDto {
+    /// Newest-first entries (remote + local + installed merge, capped —
+    /// single `"Aucune note"` fallback when empty).
+    pub notes: Vec<PatchNoteDto>,
+    /// `true` when the fresh GitHub fetch failed on every repo (stale cache
+    /// still served when present, else empty): the frontend shows the muted
+    /// offline hint instead of a silent empty state. No toast, no error.
+    pub unreachable: bool,
+}
+
 /// Launcher version for the bottom status bar (never the modpack version,
 /// which stays in `#version-pill`). `display` is the short text
 /// (`v0.1.0`, commit hash, or `"dev"`); `detail` is the human source line
@@ -1106,18 +1147,47 @@ impl AppState {
         })
     }
 
-    /// Assemble the Forge launch command (no spawn — testable).
-    ///
-    /// Returns `(argv, game_dir, warnings)`: `warnings` carries honest notes
-    /// for settings the 1.7.10 command line cannot express (e.g. an
-    /// unparsable resolution), surfaced by the caller in the Console log.
-    pub fn launch_argv(&self) -> Result<(Vec<String>, PathBuf, Vec<String>), String> {
+    /// Instantané cloné pour construire le lancement hors mutex : le
+    /// `tokio::Mutex` ne couvre que ce clone (microsecondes), tout le
+    /// travail lourd (`build_full_command`, balayage bytecode des jars)
+    /// tourne ensuite sans verrou (voir `launch_argv_from`).
+    pub fn launch_snapshot(
+        &self,
+    ) -> Result<(Manifest, MinecraftSession, PathBuf, SettingsDto), String> {
         let manifest = self
             .manifest
             .clone()
             .ok_or_else(|| "Manifeste introuvable.".to_string())?;
         let session = self.ensure_logged_in()?.clone();
         let game_dir = self.game_dir();
+        let settings = self.settings.clone();
+        Ok((manifest, session, game_dir, settings))
+    }
+
+    /// Assemble the Forge launch command (no spawn — testable).
+    ///
+    /// Returns `(argv, game_dir, warnings)`: `warnings` carries honest notes
+    /// for settings the 1.7.10 command line cannot express (e.g. an
+    /// unparsable resolution), surfaced by the caller in the Console log.
+    pub fn launch_argv(&self) -> Result<(Vec<String>, PathBuf, Vec<String>), String> {
+        let (manifest, session, game_dir, settings) = self.launch_snapshot()?;
+        Self::launch_argv_from(&manifest, &session, &game_dir, &settings)
+    }
+
+    /// Construction pure du lancement à partir d'un instantané (hors mutex).
+    /// Même résultat que [`launch_argv`], sans emprunter l'état partagé :
+    /// les appelants async clonent via [`launch_snapshot`] sous un verrou
+    /// court puis calculent ici, verrou relâché (le balayage bytecode ouvre
+    /// chaque jar du classpath — secondes sur un gros `libraries/`).
+    pub fn launch_argv_from(
+        manifest: &Manifest,
+        session: &MinecraftSession,
+        game_dir: &Path,
+        settings: &SettingsDto,
+    ) -> Result<(Vec<String>, PathBuf, Vec<String>), String> {
+        let game_dir = game_dir.to_path_buf();
+        let manifest = manifest.clone();
+        let session = session.clone();
         let profile = LaunchProfile::with_memory(
             session.name.clone(),
             session.uuid.clone(),
@@ -1125,15 +1195,12 @@ impl AppState {
             UserType::Msa,
             manifest.mc_version.clone(),
             game_dir.clone(),
-            &launcher_core::Settings::new(
-                self.settings.memory_min.trim(),
-                self.settings.memory_max.trim(),
-            ),
+            &launcher_core::Settings::new(settings.memory_min.trim(), settings.memory_max.trim()),
         );
         let cmd = build_full_command(&manifest, &profile, Os::current());
         let mut argv = cmd.full_command;
         let mut warnings = Vec::new();
-        let experimental = self.settings.experimental_runtime;
+        let experimental = settings.experimental_runtime;
         // Settings JVM preset / custom args: spliced before `-cp` (JVM
         // dedups repeated flags, last occurrence wins). The Log4Shell flag
         // and the FS-Patches updater opt-out always ride along (both
@@ -1142,22 +1209,18 @@ impl AppState {
             LOG4J_NOLOOKUPS_FLAG.to_string(),
             FSPATCHES_CDN_BYPASS_FLAG.to_string(),
         ];
-        if experimental && self.settings.jvm_preset.trim() == "lowram" {
+        if experimental && settings.jvm_preset.trim() == "lowram" {
             // CMS was removed in JDK 14 — the lowram preset would crash
             // Java 21 on startup. Fall back loudly instead of silently.
             warnings.push(
                 "Preset « lowram » ignoré en mode expérimental (CMS supprimé de Java 21) — preset 46anarchy appliqué.".to_string(),
             );
-            extras.extend(
-                JVM_PRESET_46ANARCHY
-                    .split_whitespace()
-                    .map(str::to_string),
-            );
+            extras.extend(JVM_PRESET_46ANARCHY.split_whitespace().map(str::to_string));
         } else {
             // Part utilisateur (preset ou textarea partagé) ajoutée BRUTE :
             // c'est `enforce_single_collector` (post-assemblage, plus bas)
             // qui tranche, jamais un assainissement partiel avant le canonique.
-            extras.extend(extra_jvm_args(&self.settings));
+            extras.extend(extra_jvm_args(settings));
         }
         if experimental {
             // The upstream wall (RFB classloader, file encoding, add-opens).
@@ -1186,30 +1249,30 @@ impl AppState {
         }
         // Resolution + fullscreen: 1.7.10 accepts `--width/--height/--fullscreen`
         // game args, appended after the template args.
-        match parse_resolution(&self.settings.resolution) {
+        match parse_resolution(&settings.resolution) {
             Some((w, h)) => {
                 argv.push("--width".to_string());
                 argv.push(w.to_string());
                 argv.push("--height".to_string());
                 argv.push(h.to_string());
             }
-            None if self.settings.resolution.trim().is_empty() => {}
+            None if settings.resolution.trim().is_empty() => {}
             None => warnings.push(format!(
                 "Résolution « {} » illisible — attendue sous la forme 1920x1080.",
-                self.settings.resolution.trim()
+                settings.resolution.trim()
             )),
         }
-        if self.settings.fullscreen {
+        if settings.fullscreen {
             argv.push("--fullscreen".to_string());
         }
-        let override_java = self.settings.java_path.trim();
+        let override_java = settings.java_path.trim();
         if !override_java.is_empty() {
             if let Some(first) = argv.first_mut() {
                 *first = override_java.to_string();
             }
         }
         if experimental {
-            self.apply_modern_launch(&mut argv, &game_dir, &manifest, &mut warnings)?;
+            apply_modern_launch_for(settings, &mut argv, &game_dir, &manifest, &mut warnings)?;
         }
         // Point d'étranglement unique post-assemblage (preset + customs +
         // mur + mémoire : tout est déjà dans argv) : une seule famille de
@@ -1245,29 +1308,35 @@ impl AppState {
         Ok((argv, game_dir, warnings))
     }
 
-    /// Experimental rewrite (LWJGL3 + Java 21): Java 21 binary, upstream
-    /// classpath in profile order, RFB entry point. Errors when the modern
-    /// profile was never provisioned (caller runs the provision step first).
-    fn apply_modern_launch(
-        &self,
-        argv: &mut [String],
-        game_dir: &Path,
-        manifest: &launcher_core::Manifest,
-        warnings: &mut Vec<String>,
-    ) -> Result<(), String> {
-        let profile = launcher_core::load_cached_modern_profile(game_dir).ok_or_else(|| {
-            "Profil LWJGL3 manquant — relancez une installation en mode expérimental.".to_string()
-        })?;
-        // Java runtime selection (auto-managed from the pack flavor:
-        // experimental always launches on GraalVM 21 —
-        // `java_runtime_for_flavor(true)`; the `java_runtime` settings
-        // field is compat-only and ignored here). Explicit `java_path`
-        // override still wins when set. A missing/invalid GraalVM falls
-        // back with a warning instead of erroring (a stale `java21/` dir
-        // must never break launch — the next install/play re-provisions it).
-        if self.settings.java_path.trim().is_empty() {
-            debug_assert_eq!(launcher_core::java_runtime_for_flavor(true), "graalvm21");
-            match launcher_core::resolve_modern_java(game_dir) {
+    /// Shell-quoted launch command (log display).
+    pub fn launch_command_string(&self) -> Result<String, String> {
+        Ok(quote_command(&self.launch_argv()?.0))
+    }
+}
+
+/// Experimental rewrite, forme pure (voir `AppState::apply_modern_launch`) :
+/// mêmes lectures disque, sans emprunter l'état — appelée par
+/// `launch_argv_from` hors mutex.
+fn apply_modern_launch_for(
+    settings: &SettingsDto,
+    argv: &mut [String],
+    game_dir: &Path,
+    manifest: &launcher_core::Manifest,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
+    let profile = launcher_core::load_cached_modern_profile(game_dir).ok_or_else(|| {
+        "Profil LWJGL3 manquant — relancez une installation en mode expérimental.".to_string()
+    })?;
+    // Java runtime selection (auto-managed from the pack flavor:
+    // experimental always launches on GraalVM 21 —
+    // `java_runtime_for_flavor(true)`; the `java_runtime` settings
+    // field is compat-only and ignored here). Explicit `java_path`
+    // override still wins when set. A missing/invalid GraalVM falls
+    // back with a warning instead of erroring (a stale `java21/` dir
+    // must never break launch — the next install/play re-provisions it).
+    if settings.java_path.trim().is_empty() {
+        debug_assert_eq!(launcher_core::java_runtime_for_flavor(true), "graalvm21");
+        match launcher_core::resolve_modern_java(game_dir) {
                 Some(java21) => {
                     if let Some(first) = argv.first_mut() {
                         *first = java21.to_string_lossy().into_owned();
@@ -1278,40 +1347,34 @@ impl AppState {
                         .to_string(),
                 ),
             }
-        }
-        // Classpath: upstream profile order + vanilla jar last.
-        let mut cp = launcher_core::modern_classpath_entries(
-            &profile,
-            game_dir,
-            &manifest.mc_version,
-            Os::current(),
-            std::env::consts::ARCH,
-        );
-        // Pinned CDN libraries the profile omits (slf4j, MongoDB, molang,
-        // mclib, guava-17.0) — downloaded by the install plan with SHAs.
-        cp.extend(launcher_core::modern_cdn_classpath_entries(
-            manifest,
-            game_dir,
-            Os::current(),
-        ));
-        let sep = launcher_core::classpath_separator(Os::current()).to_string();
-        let Some(cp_pos) = argv.iter().position(|a| a == "-cp" || a == "-classpath") else {
-            warnings.push("Mode expérimental : aucun -cp trouvé, classpath inchangé.".to_string());
-            return Ok(());
-        };
-        if cp_pos + 1 < argv.len() {
-            argv[cp_pos + 1] = cp.join(&sep);
-            if cp_pos + 2 < argv.len() {
-                argv[cp_pos + 2] = launcher_core::MODERN_MAIN_CLASS.to_string();
-            }
-        }
-        Ok(())
     }
-
-    /// Shell-quoted launch command (log display).
-    pub fn launch_command_string(&self) -> Result<String, String> {
-        Ok(quote_command(&self.launch_argv()?.0))
+    // Classpath: upstream profile order + vanilla jar last.
+    let mut cp = launcher_core::modern_classpath_entries(
+        &profile,
+        game_dir,
+        &manifest.mc_version,
+        Os::current(),
+        std::env::consts::ARCH,
+    );
+    // Pinned CDN libraries the profile omits (slf4j, MongoDB, molang,
+    // mclib, guava-17.0) — downloaded by the install plan with SHAs.
+    cp.extend(launcher_core::modern_cdn_classpath_entries(
+        manifest,
+        game_dir,
+        Os::current(),
+    ));
+    let sep = launcher_core::classpath_separator(Os::current()).to_string();
+    let Some(cp_pos) = argv.iter().position(|a| a == "-cp" || a == "-classpath") else {
+        warnings.push("Mode expérimental : aucun -cp trouvé, classpath inchangé.".to_string());
+        return Ok(());
+    };
+    if cp_pos + 1 < argv.len() {
+        argv[cp_pos + 1] = cp.join(&sep);
+        if cp_pos + 2 < argv.len() {
+            argv[cp_pos + 2] = launcher_core::MODERN_MAIN_CLASS.to_string();
+        }
     }
+    Ok(())
 }
 
 /// Canonical JVM preset arg lines. MUST stay in sync with `JVM_PRESETS` in
@@ -1703,6 +1766,33 @@ mod tests {
     }
 
     #[test]
+    fn launch_snapshot_then_from_equals_direct_argv() {
+        // Garde anti-régression du découpage verrou court : l'instantané
+        // cloné + construction hors mutex donne exactement le même
+        // lancement que la méthode directe (comportement identique, le
+        // balayage bytecode des jars ne tient plus le mutex).
+        for settings in [
+            SettingsDto::default(),
+            SettingsDto {
+                jvm_preset: "lowram".to_string(),
+                resolution: "1280x720".to_string(),
+                fullscreen: true,
+                ..Default::default()
+            },
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut s = logged_in(dir.path());
+            s.settings = settings;
+            let direct = s.launch_argv().expect("direct");
+            let (manifest, session, game_dir, snap_settings) =
+                s.launch_snapshot().expect("snapshot");
+            let via = AppState::launch_argv_from(&manifest, &session, &game_dir, &snap_settings)
+                .expect("via snapshot");
+            assert_eq!(direct, via);
+        }
+    }
+
+    #[test]
     fn launch_argv_uses_msa_session() {
         let dir = tempfile::tempdir().unwrap();
         let s = logged_in(dir.path());
@@ -1951,8 +2041,7 @@ mod tests {
         ] {
             let (kept, stripped) = enforce_single_collector(&[flag.to_string()], true);
             assert!(
-                kept
-                    .iter()
+                kept.iter()
                     .all(|a| !matches!(super::gc_selector_kind(a), Some("autre"))),
                 "{flag}"
             );
@@ -2006,7 +2095,10 @@ mod tests {
         );
         // Réglages nommés sans sélecteur : jamais retirés (inoffensifs).
         let (kept, stripped) = enforce_single_collector(
-            &["-XX:-UseAdaptiveSizePolicy".to_string(), "-Xmn512m".to_string()],
+            &[
+                "-XX:-UseAdaptiveSizePolicy".to_string(),
+                "-Xmn512m".to_string(),
+            ],
             true,
         );
         assert!(stripped.is_empty());

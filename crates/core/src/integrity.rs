@@ -108,13 +108,46 @@ pub fn is_file_blacklisted(file_name: &str) -> bool {
 /// `required-after:palaforge-utils` — FML avalait la `MissingModsException`
 /// et aucune phase de chargement ne démarrait. Un fichier du fork déjà
 /// présent sur disque reste, inerte — comme le jar serveur dédié.
+/// `true` quand `hay` contient `needle`, insensible à la casse ASCII,
+/// en traitant `\` comme `/` (séparateurs CDN mixtes) — sans allocation.
+/// Appelé une fois par fichier et par plan, donc chaud (~500× par JOUER).
+fn path_contains_ci_slash(hay: &str, needle: &str) -> bool {
+    let h = hay.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || h.len() < n.len() {
+        return false;
+    }
+    let norm = |b: u8| {
+        let b = if b == b'\\' { b'/' } else { b };
+        b.to_ascii_lowercase()
+    };
+    (0..=h.len() - n.len()).any(|i| {
+        h[i..i + n.len()]
+            .iter()
+            .zip(n.iter())
+            .all(|(a, b)| norm(*a) == b.to_ascii_lowercase())
+    })
+}
+
+/// `true` quand `hay` contient `needle`, insensible à la casse ASCII,
+/// sans allocation (noms de fichiers, ~500× par plan).
+fn str_contains_ci(hay: &str, needle: &str) -> bool {
+    let h = hay.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || h.len() < n.len() {
+        return false;
+    }
+    (0..=h.len() - n.len()).any(|i| h[i..i + n.len()].eq_ignore_ascii_case(n))
+}
+
 pub fn is_palaforge_file(file: &ManifestFile) -> bool {
-    let name = file.name.to_lowercase();
-    if name == "palaforge-1.7.10-10.13.4.2512.jar" {
+    if file
+        .name
+        .eq_ignore_ascii_case("palaforge-1.7.10-10.13.4.2512.jar")
+    {
         return true;
     }
-    let path = file.path.replace('\\', "/").to_lowercase();
-    path.contains("fr/paladium/palaforge")
+    path_contains_ci_slash(&file.path, "fr/paladium/palaforge")
 }
 
 /// `true` for the CDN's patched LWJGL jars (`org/lwjgl/…`), whose `Sys`
@@ -126,16 +159,24 @@ pub fn is_palaforge_file(file: &ManifestFile) -> bool {
 /// `liblwjgl_pala*` n'est requis. Sur Windows le payload CDN reste servi
 /// tel quel (modèle `libraries-windows` natif).
 pub fn is_cdn_patched_lwjgl(file: &ManifestFile) -> bool {
-    let path = file.path.replace('\\', "/").to_lowercase();
-    if path.starts_with("org/lwjgl/") {
+    // Préfixe de chemin insensible à la casse, `\` toléré, sans allocation.
+    let p = file.path.as_bytes();
+    let prefix = b"org/lwjgl/";
+    let starts_with_org_lwjgl = p.len() >= prefix.len() && {
+        p[..prefix.len()].iter().zip(prefix.iter()).all(|(a, b)| {
+            let a = if *a == b'\\' { b'/' } else { *a };
+            a.to_ascii_lowercase() == *b
+        })
+    };
+    if starts_with_org_lwjgl {
         return true;
     }
-    let name = file.name.to_lowercase();
     // Noms versionnés uniquement (`lwjgl-2.9.1.jar`) : le préfixe nu
     // avalait aussi `lwjgl-tweaker.jar`, un mod légitime.
     ["lwjgl-", "lwjgl_util-"].iter().any(|prefix| {
-        name.strip_prefix(prefix)
-            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+        file.name.len() >= prefix.len()
+            && file.name.as_bytes()[..prefix.len()].eq_ignore_ascii_case(prefix.as_bytes())
+            && file.name[prefix.len()..].starts_with(|c: char| c.is_ascii_digit())
     })
 }
 
@@ -180,7 +221,8 @@ pub fn is_dedicated_server_file(manifest: &Manifest, file: &ManifestFile) -> boo
 /// …). Insensible à la casse. Voir la règle OS en tête de module (référence
 /// FS-Patches + leçon du wipe 16:41) : ce seau ignore le champ `os`.
 pub fn is_libraries_model(name: &str) -> bool {
-    name.to_ascii_lowercase().starts_with("libraries-")
+    // Préfixe insensible à la casse sans allocation (chaud : chaque fichier).
+    name.len() >= 10 && name.as_bytes()[..10].eq_ignore_ascii_case(b"libraries-")
 }
 
 /// Positive OS-gate for a model: empty `os` (shared) or lists `current`.
@@ -256,7 +298,7 @@ pub fn file_allowed(manifest: &Manifest, file: &ManifestFile, current: Os) -> bo
         // Pas de repli suffixe sur le modèle : le suffixe `libraries-*`
         // est cross-platform — seuls les champs `os` comptent, et un champ
         // vide vaut partagé.
-        if file.name.to_ascii_lowercase().contains("natives") {
+        if str_contains_ci(&file.name, "natives") {
             if !is_allowed_for(&file.os, current) {
                 return false;
             }
@@ -438,7 +480,10 @@ pub fn plan_dedupe_key(file: &ManifestFile, dest: &Path) -> (String, String, Str
 /// outside the instance root. Duplicate entries (le CDN liste chaque fichier
 /// deux fois, ex. nashorn-core 15.4) fusionnent via [`plan_dedupe_key`].
 pub fn plan_downloads(manifest: &Manifest, game_dir: &Path, current: Os) -> Vec<PlannedFile> {
-    let mut seen: HashSet<(String, String, String, String)> = HashSet::new();
+    // Capacité d'emblée : le CDN liste ~500 fichiers (doublés) — évite les
+    // réallocations du `HashSet` à chaque plan (plusieurs plans par JOUER).
+    let mut seen: HashSet<(String, String, String, String)> =
+        HashSet::with_capacity(manifest.files.len());
     manifest
         .files
         .iter()
@@ -553,11 +598,7 @@ pub fn check_jar_class_versions(paths: &[PathBuf], cap: u32) -> Vec<String> {
         }
         if let Some(version) = max_class_version_in_jar(path) {
             if version > cap {
-                let key = (
-                    path.to_string_lossy().replace('\\', "/"),
-                    version,
-                    cap,
-                );
+                let key = (path.to_string_lossy().replace('\\', "/"), version, cap);
                 // Verrou empoisonné : on avertit (fail-open), jamais de
                 // panique sur une voie d'avertissement.
                 let already = warned_jar_versions()
@@ -828,7 +869,10 @@ mod tests {
             .find(|f| f.name == "palaforge-1.7.10-10.13.4.2512.jar")
             .unwrap();
         // Le mod passe la garde exacte, le fork reste exclu — sur tous les OS.
-        assert!(!is_palaforge_file(utils), "PalaForgeUtils n'est pas le fork");
+        assert!(
+            !is_palaforge_file(utils),
+            "PalaForgeUtils n'est pas le fork"
+        );
         assert!(!is_file_blacklisted(&utils.name));
         assert!(is_palaforge_file(fork), "artefact exact du fork exclu");
         assert!(is_file_blacklisted(&fork.name));
@@ -863,8 +907,9 @@ mod tests {
             "PalaForgeUtils absent → stale (JOUER/verify le re-télécharge)"
         );
         assert!(
-            planned.iter().all(|p| p.file.name
-                != "palaforge-1.7.10-10.13.4.2512.jar"),
+            planned
+                .iter()
+                .all(|p| p.file.name != "palaforge-1.7.10-10.13.4.2512.jar"),
             "plan sans le fork : {:?}",
             planned.iter().map(|p| &p.file.name).collect::<Vec<_>>()
         );
@@ -917,7 +962,10 @@ mod tests {
         // Voisins : jamais exclus, sur aucun OS.
         for name in ["lwjgl3ify.jar", "lwjgl-tweaker.jar", "my-lwjgl-wrapper.jar"] {
             let f = by_name(name);
-            assert!(!is_cdn_patched_lwjgl(&f), "{name} n'est pas du LWJGL patché");
+            assert!(
+                !is_cdn_patched_lwjgl(&f),
+                "{name} n'est pas du LWJGL patché"
+            );
             for os in [Os::Windows, Os::Macos, Os::Linux] {
                 assert!(file_allowed(&m, &f, os), "{name} gardé sur {os:?}");
             }
@@ -1391,16 +1439,12 @@ mod tests {
         // `(chemin, version, plafond)`, les passages suivants se taisent.
         let dir = tempfile::tempdir().unwrap();
         let v53 = craft_jar(dir.path(), "double.jar", &[("a/N.class", 53)], &[]);
-        let first =
-            check_jar_class_versions(std::slice::from_ref(&v53), CLASSIC_MAX_CLASS_VERSION);
+        let first = check_jar_class_versions(std::slice::from_ref(&v53), CLASSIC_MAX_CLASS_VERSION);
         assert_eq!(first.len(), 1, "premier passage avertit");
         assert!(first[0].contains("double.jar"));
         let second =
             check_jar_class_versions(std::slice::from_ref(&v53), CLASSIC_MAX_CLASS_VERSION);
-        assert!(
-            second.is_empty(),
-            "second passage silencieux : {second:?}"
-        );
+        assert!(second.is_empty(), "second passage silencieux : {second:?}");
         // Un autre jar avertit toujours (déduplication par jar, pas
         // globale).
         let other = craft_jar(dir.path(), "autre.jar", &[("a/N.class", 53)], &[]);
@@ -1589,5 +1633,70 @@ mod tests {
         f2.path = "payload.jar".to_string();
         assert!(resolve_local_path(game_dir, &m2, &f2).is_err());
         assert!(validate_rel_path("../../outside").is_err());
+    }
+
+    #[test]
+    fn case_insensitive_matchers_stay_allocation_free_and_exact() {
+        // Garde anti-régression des helpers sans allocation (audit perf) :
+        // même verdicts que les anciennes formes `to_lowercase()`, casse
+        // mixte incluse, sans changer la règle (préfixe exact, pas de
+        // faux positif sur les voisins légitimes).
+        assert!(is_libraries_model("libraries-windows"));
+        assert!(is_libraries_model("LIBRARIES-Windows"));
+        assert!(is_libraries_model("Libraries-Linux"));
+        assert!(!is_libraries_model("libraries"));
+        assert!(!is_libraries_model("natives-windows"));
+        assert!(str_contains_ci("Thing-NATIVES-windows.jar", "natives"));
+        assert!(!str_contains_ci("scala.jar", "natives"));
+        assert!(path_contains_ci_slash(
+            "FR\\Paladium\\PalaForge\\x.jar",
+            "fr/paladium/palaforge"
+        ));
+        assert!(!path_contains_ci_slash(
+            "mods/PalaForgeUtils-6.6.2.jar",
+            "fr/paladium/palaforge"
+        ));
+        let lwjgl = |name: &str, path: &str| crate::manifest::ManifestFile {
+            name: name.to_string(),
+            model: "libraries-windows".to_string(),
+            url: "https://x".to_string(),
+            size: 1,
+            sha1: "a".to_string(),
+            path: path.to_string(),
+            os: vec![],
+        };
+        assert!(is_cdn_patched_lwjgl(&lwjgl(
+            "lwjgl-2.9.1.jar",
+            "ORG/LWJGL/lwjgl/2.9.1/lwjgl-2.9.1.jar"
+        )));
+        assert!(is_cdn_patched_lwjgl(&lwjgl(
+            "LWJGL_UTIL-2.9.1.jar",
+            "mods/LWJGL_UTIL-2.9.1.jar"
+        )));
+        assert!(!is_cdn_patched_lwjgl(&lwjgl(
+            "lwjgl-tweaker.jar",
+            "lwjgl-tweaker.jar"
+        )));
+        assert!(!is_cdn_patched_lwjgl(&lwjgl(
+            "my-lwjgl-wrapper.jar",
+            "com/example/my-lwjgl-wrapper.jar"
+        )));
+        let pala = |name: &str, path: &str| crate::manifest::ManifestFile {
+            name: name.to_string(),
+            model: "mods".to_string(),
+            url: "https://x".to_string(),
+            size: 1,
+            sha1: "a".to_string(),
+            path: path.to_string(),
+            os: vec![],
+        };
+        assert!(is_palaforge_file(&pala(
+            "PALAFORGE-1.7.10-10.13.4.2512.JAR",
+            "quelque/part.jar"
+        )));
+        assert!(!is_palaforge_file(&pala(
+            "PalaForgeUtils-6.6.2.jar",
+            "PalaForgeUtils-6.6.2.jar"
+        )));
     }
 }

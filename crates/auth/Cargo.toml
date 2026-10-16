@@ -18,10 +18,23 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-# Real OS-keyring backend (Linux Secret Service) + pure-Rust crypto (no
-# OpenSSL system dep). WITHOUT a backend feature, keyring 3 silently uses
-# its in-memory mock store: logins work per session but vanish on restart.
+# Real OS-keyring backend per platform + pure-Rust crypto (no OpenSSL
+# system dep). WITHOUT a backend feature, keyring 3 silently uses its
+# in-memory mock store: logins work per session but vanish on restart.
+# Feature names verified against keyring 3.6.3 (see Cargo.lock):
+# - Linux/BSD → `sync-secret-service` (D-Bus Secret Service);
+# - Windows → `windows-native` (Credential Manager);
+# - macOS → `apple-native` (Keychain).
 # `crypto-rust` (not `crypto-openssl`) keeps crypto dependency-free; linking
-# still needs the D-Bus client lib (`libdbus-1-dev` on Debian, `dbus-devel`
-# on Fedora — CI installs it, see .github/workflows).
+# still needs the D-Bus client lib on Linux (`libdbus-1-dev` on Debian,
+# `dbus-devel` on Fedora — CI installs it, see .github/workflows).
+keyring = { version = "3", features = ["crypto-rust"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"))'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }

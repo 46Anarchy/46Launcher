@@ -26,10 +26,10 @@ use tokio::sync::{mpsc, Mutex};
 
 use crate::state::{
     freshness_against_cache, missing_client_id_help, save_settings_file, settings_path,
-    AccountInfoDto, AppState, ConsoleTailDto, DeviceCodeInfo, GameOutcomeDto, InstallSummaryDto,
-    JavaInfoDto, JavaProgressPayload, JavaRuntimesDto, ManifestStatusDto, ModInfo,
-    PackFlavorSwapDto, PatchNoteDto, PlayResultDto, ProgressPayload, ServerStatusDto, SessionInfo,
-    SettingsDto, UninstallReportDto, VerifyReportDto, VersionInfo, BuildInfoDto,
+    AccountInfoDto, AppState, BuildInfoDto, ConsoleTailDto, DeviceCodeInfo, GameOutcomeDto,
+    InstallSummaryDto, JavaInfoDto, JavaProgressPayload, JavaRuntimesDto, ManifestStatusDto,
+    ModInfo, PackFlavorSwapDto, PatchNotesFeedDto, PlayResultDto, ProgressPayload, ServerStatusDto,
+    SessionInfo, SettingsDto, UninstallReportDto, VerifyReportDto, VersionInfo,
 };
 
 /// Mutex-guarded backend state shared with the Tauri app.
@@ -166,17 +166,19 @@ pub async fn set_active_account(state: &SharedState, uuid: String) -> Result<Ses
 /// Used by the Comptes view's per-row "Actualiser" button; selection itself
 /// lives only in the top-right avatar menu ([`set_active_account`]).
 pub async fn refresh_account(state: &SharedState, uuid: String) -> Result<AccountInfoDto, String> {
-    let (client_id, token) = {
+    // Verrou court : on ne garde que le `client_id`, la lecture trousseau
+    // (D-Bus, synchrone) se fait hors mutex pour ne pas sérialiser les
+    // autres commandes pendant le round-trip.
+    let client_id = {
         let s = state.lock().await;
-        let client_id = client_id_locked(&s)?;
-        let token = launcher_auth::load_refresh_token(Some(&uuid))
-            .map_err(|e| format!("Stockage sécurisé : {e}"))?
-            .ok_or_else(|| "Compte inconnu.".to_string())?;
-        if token.trim().is_empty() {
-            return Err("Compte inconnu.".to_string());
-        }
-        (client_id, token)
+        client_id_locked(&s)?
     };
+    let token = launcher_auth::load_refresh_token(Some(&uuid))
+        .map_err(|e| format!("Stockage sécurisé : {e}"))?
+        .ok_or_else(|| "Compte inconnu.".to_string())?;
+    if token.trim().is_empty() {
+        return Err("Compte inconnu.".to_string());
+    }
     let refresh =
         launcher_auth::refresh_session(&AuthConfig::with_client_id(client_id), &token).await;
     let session = match refresh {
@@ -202,10 +204,11 @@ pub async fn refresh_account(state: &SharedState, uuid: String) -> Result<Accoun
             return Err(e.to_string());
         }
     };
+    // Écriture trousseau (D-Bus) hors mutex : le verrou ne couvre que la
+    // mutation mémoire ci-dessous.
+    let _ = launcher_auth::save_refresh_token(Some(session.uuid.as_str()), &session.refresh_token);
     let (dto, game_dir) = {
         let mut s = state.lock().await;
-        let _ =
-            launcher_auth::save_refresh_token(Some(session.uuid.as_str()), &session.refresh_token);
         // NOTE: no `set_active_account` here — a manual refresh upserts the
         // session in place and must never steal the active pointer.
         let uuid = session.uuid.clone();
@@ -305,17 +308,17 @@ pub async fn refresh_session_for(
     profile: Option<String>,
 ) -> Result<SessionInfo, String> {
     let profile_id = profile.as_deref();
-    let (client_id, token) = {
+    // Verrou court : `client_id` seul, lecture trousseau (D-Bus) hors mutex.
+    let client_id = {
         let s = state.lock().await;
-        let client_id = client_id_locked(&s)?;
-        let token = launcher_auth::load_refresh_token(profile_id)
-            .map_err(|e| format!("Stockage sécurisé : {e}"))?
-            .ok_or_else(|| "Aucune session enregistrée.".to_string())?;
-        if token.trim().is_empty() {
-            return Err("Aucune session enregistrée.".to_string());
-        }
-        (client_id, token)
+        client_id_locked(&s)?
     };
+    let token = launcher_auth::load_refresh_token(profile_id)
+        .map_err(|e| format!("Stockage sécurisé : {e}"))?
+        .ok_or_else(|| "Aucune session enregistrée.".to_string())?;
+    if token.trim().is_empty() {
+        return Err("Aucune session enregistrée.".to_string());
+    }
     let refresh =
         launcher_auth::refresh_session(&AuthConfig::with_client_id(client_id), &token).await;
     let session = match refresh {
@@ -348,11 +351,11 @@ pub async fn refresh_session_for(
         }
     };
     let info = SessionInfo::from(&session);
+    // Écriture trousseau (D-Bus) hors mutex.
+    let _ = launcher_auth::save_refresh_token(Some(session.uuid.as_str()), &session.refresh_token);
     let game_dir;
     {
         let mut s = state.lock().await;
-        let _ =
-            launcher_auth::save_refresh_token(Some(session.uuid.as_str()), &session.refresh_token);
         s.upsert_session(session);
         sync_roster_locked(&mut s);
         game_dir = s.game_dir();
@@ -409,6 +412,10 @@ pub async fn request_login(state: &SharedState) -> Result<DeviceCodeInfo, String
 /// Step 2: poll until the user approves, then run the full
 /// MSA → XBL → XSTS → Minecraft chain and store the session.
 /// Long-running (resolves when the user validates or the code expires).
+///
+/// Cancellable: `cancel_login` clears `pending_login`, and the Microsoft
+/// poll below races a watcher on that same slot — the watcher wins in
+/// ~500 ms, so a late phone approval after Annuler never creates a session.
 pub async fn poll_login(state: &SharedState) -> Result<SessionInfo, String> {
     let (client_id, device) = {
         let s = state.lock().await;
@@ -420,9 +427,20 @@ pub async fn poll_login(state: &SharedState) -> Result<SessionInfo, String> {
     };
     let config = AuthConfig::with_client_id(client_id);
     let client = http_client()?;
-    let msa = poll_device_token(&client, &config, &device)
-        .await
-        .map_err(|e| e.to_string())?;
+    let device_code = device.device_code.clone();
+    let msa = {
+        let watcher = wait_for_login_cancel(state.clone(), device_code.clone());
+        tokio::select! {
+            res = poll_device_token(&client, &config, &device) => res.map_err(|e| e.to_string())?,
+            () = watcher => return Err("Connexion annulée.".to_string()),
+        }
+    };
+    // Garde tardive : approbation arrivée entre la fin du sondage et ici
+    // alors que l'utilisateur venait d'annuler (ou de relancer une demande).
+    {
+        let s = state.lock().await;
+        ensure_login_not_cancelled(s.pending_login.as_ref(), &device_code)?;
+    }
     let xbl = authenticate_xbl(&client, &msa.access_token)
         .await
         .map_err(|e| e.to_string())?;
@@ -443,13 +461,14 @@ pub async fn poll_login(state: &SharedState) -> Result<SessionInfo, String> {
         obtained: std::time::Instant::now(),
     };
     let info = SessionInfo::from(&session);
+    // Écriture trousseau (D-Bus) hors mutex.
+    let uuid = session.uuid.clone();
+    let _ = launcher_auth::save_refresh_token(Some(uuid.as_str()), &session.refresh_token);
     let game_dir;
     {
         let mut s = state.lock().await;
         // Per-UUID keyring profile (multi-account) + roster sync; a fresh
         // login always becomes the active account.
-        let uuid = session.uuid.clone();
-        let _ = launcher_auth::save_refresh_token(Some(uuid.as_str()), &session.refresh_token);
         s.upsert_session(session);
         s.set_active_account(&uuid);
         sync_roster_locked(&mut s);
@@ -461,6 +480,54 @@ pub async fn poll_login(state: &SharedState) -> Result<SessionInfo, String> {
         s.pending_login = None;
     }
     Ok(info)
+}
+
+/// Annule la connexion Microsoft en cours, s'il y en a une : `pending_login`
+/// est effacé, et le [`poll_login`] en vol s'interrompt en ~500 ms sans
+/// jamais créer de session (garde d'annulation). Best-effort : réussit
+/// toujours, même sans connexion en cours.
+pub async fn cancel_login(state: &SharedState) -> Result<(), String> {
+    state.lock().await.pending_login = None;
+    Ok(())
+}
+
+/// `true` quand la demande `device_code` n'est plus la demande en cours
+/// (annulée par [`cancel_login`] ou remplacée par un nouveau
+/// [`request_login`]). Pur (testé sans réseau).
+fn login_request_superseded(pending: Option<&DeviceCodeResponse>, device_code: &str) -> bool {
+    match pending {
+        Some(p) => p.device_code != device_code,
+        None => true,
+    }
+}
+
+/// Garde d'annulation : erreur quand la demande `device_code` n'est plus
+/// d'actualité. Examinée sans réseau (l'annulation reste testée
+/// hermétiquement, le sondage Microsoft ne l'étant pas).
+fn ensure_login_not_cancelled(
+    pending: Option<&DeviceCodeResponse>,
+    device_code: &str,
+) -> Result<(), String> {
+    if login_request_superseded(pending, device_code) {
+        return Err("Connexion annulée.".to_string());
+    }
+    Ok(())
+}
+
+/// Résout dès que la demande `device_code` est annulée ou remplacée
+/// (scrutation douce de `pending_login`, sans réseau). Ne résout jamais
+/// sinon : le `select!` de [`poll_login`] reste branché sur le sondage
+/// Microsoft jusqu'à approbation ou expiration.
+async fn wait_for_login_cancel(state: SharedState, device_code: String) {
+    loop {
+        {
+            let s = state.lock().await;
+            if login_request_superseded(s.pending_login.as_ref(), &device_code) {
+                return;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -707,7 +774,19 @@ fn phase_log(detail: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
-    eprintln!("[launcher] install phase {detail} t={ms}ms");
+    crate::log_verbose!("[launcher] install phase {detail} t={ms}ms");
+}
+
+/// Ligne de durée permanente d'une commande lourde du démarrage (une seule
+/// ligne par appel, jamais par fichier/ligne — coût : un `Instant` + un
+/// `eprintln!`). Inconditionnelle : une poignée de lignes par démarrage,
+/// pas du bruit.
+fn boot_timing_log(what: &str, started: std::time::Instant) {
+    eprintln!(
+        "[launcher] démarrage {what} en {} ms t={}ms",
+        started.elapsed().as_millis(),
+        crate::state::boot_wall_ms()
+    );
 }
 
 /// Compteurs partagés d'UN run d'installation (toutes phases, un seul total).
@@ -1115,11 +1194,10 @@ async fn plan_mojang_phase(
     // name) or shadows (same artifact base, e.g. CDN guava-17.0 beats
     // Mojang guava-15.0 on the classpath).
     let cdn_planned = launcher_core::plan_downloads(manifest, game_dir, current);
-    let skip_names: HashSet<String> = cdn_planned.iter().map(|p| p.file.name.clone()).collect();
-    let skip_bases: HashSet<String> = cdn_planned
-        .iter()
-        .map(|p| artifact_base(&p.file.name))
-        .collect();
+    let mut skip_names: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_names.extend(cdn_planned.iter().map(|p| p.file.name.clone()));
+    let mut skip_bases: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_bases.extend(cdn_planned.iter().map(|p| artifact_base(&p.file.name)));
 
     run.say("Mojang : manifeste 1.7.10…");
     let version = load_or_fetch_mojang_version(client, game_dir)
@@ -1669,7 +1747,13 @@ async fn exec_flavor_java(
         std::sync::Arc::clone(&last),
     );
     if plan.graalvm {
-        provision_graalvm21(game_dir, Some(bridge), cancel.clone(), "Runtime expérimental").await?;
+        provision_graalvm21(
+            game_dir,
+            Some(bridge),
+            cancel.clone(),
+            "Runtime expérimental",
+        )
+        .await?;
     } else {
         if is_cancelled(&cancel) {
             return Err("Installation annulée.".to_string());
@@ -1702,6 +1786,9 @@ async fn exec_flavor_java(
 /// Both JDK statuses for the JDK pane (never fails hard — a missing or
 /// broken runtime degrades to "not installed" fields, never an error).
 pub async fn get_java_runtimes(state: &SharedState) -> JavaRuntimesDto {
+    // Deux sondes `java -version` : différé après le premier affichage côté
+    // frontend (même audit que `check_java_status`).
+    let started = std::time::Instant::now();
     let game_dir = state.lock().await.game_dir();
     let temurin_bin = launcher_core::resolve_java(&game_dir);
     let temurin = check_java(&temurin_bin);
@@ -1716,7 +1803,7 @@ pub async fn get_java_runtimes(state: &SharedState) -> JavaRuntimesDto {
         std::path::PathBuf::from(&graalvm_path)
     };
     let graalvm = check_java(&graalvm_probe_bin);
-    JavaRuntimesDto {
+    let out = JavaRuntimesDto {
         temurin8: JavaInfoDto {
             path: temurin_bin.to_string_lossy().into_owned(),
             major: temurin.major,
@@ -1733,7 +1820,9 @@ pub async fn get_java_runtimes(state: &SharedState) -> JavaRuntimesDto {
                 Some("GraalVM 21 non installé ou invalide — cliquez Télécharger.".to_string())
             },
         },
-    }
+    };
+    boot_timing_log("runtimes java", started);
+    out
 }
 
 /// Plan expérimental (métadonnées seules) : profil LWJGL3 récupéré, puis
@@ -2249,14 +2338,16 @@ async fn start_install_pipeline(
     phase_log("finalisation debut");
     run.finish();
     phase_log("finalisation fin");
+    // Persistance disque hors mutex (même ordre disque-puis-mémoire qu'avant,
+    // sans tenir le verrou pendant l'écriture).
+    let version = manifest.version.clone();
+    let snapshot = manifest.clone();
+    let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), &snapshot);
+    launcher_core::write_installed_flavor(game_dir, experimental);
     {
         let mut s = state.lock().await;
-        let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), manifest);
-        launcher_core::write_installed_flavor(game_dir, experimental);
-        s.update_status = UpdateStatus::Ok {
-            version: manifest.version.clone(),
-        };
-        s.manifest = Some(manifest.clone());
+        s.update_status = UpdateStatus::Ok { version };
+        s.manifest = Some(snapshot);
     }
     Ok(summary_dto(&summary))
 }
@@ -2300,7 +2391,10 @@ async fn play_repair_pipeline(
         ));
     } else if !gap.is_empty() {
         run.add_work(gap.len(), plan_bytes(&gap));
-        phase_log(&format!("plan-cdn fichiers={} (jouer, comblement)", gap.len()));
+        phase_log(&format!(
+            "plan-cdn fichiers={} (jouer, comblement)",
+            gap.len()
+        ));
         run.say(&format!(
             "Préparation : {} fichier(s) — vérification…",
             gap.len()
@@ -2312,14 +2406,17 @@ async fn play_repair_pipeline(
     let want_modern_inner = want_modern;
     let (cdn_out, mojang, java, modern) = tokio::join!(
         async {
+            // Persistance disque hors mutex (même ordre disque-puis-mémoire).
             if let Some(cdn) = cdn {
                 let r = run_planned(cdn, &run, Some(cancel.clone())).await;
-                let mut s = state.lock().await;
-                let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), manifest);
-                s.update_status = UpdateStatus::Ok {
-                    version: manifest.version.clone(),
-                };
-                s.manifest = Some(manifest.clone());
+                let snapshot = manifest.clone();
+                let version = snapshot.version.clone();
+                let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), &snapshot);
+                {
+                    let mut s = state.lock().await;
+                    s.update_status = UpdateStatus::Ok { version };
+                    s.manifest = Some(snapshot);
+                }
                 Some(r)
             } else if !gap.is_empty() {
                 // Version inchangée, seuls des fichiers de contenu manquent :
@@ -2327,12 +2424,14 @@ async fn play_repair_pipeline(
                 // re-hacherait ~500 fichiers à chaque JOUER, la corruption
                 // silencieuse reste du ressort de l'installation / Vérifier).
                 let r = run_planned(gap, &run, Some(cancel.clone())).await;
-                let mut s = state.lock().await;
-                let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), manifest);
-                s.update_status = UpdateStatus::Ok {
-                    version: manifest.version.clone(),
-                };
-                s.manifest = Some(manifest.clone());
+                let snapshot = manifest.clone();
+                let version = snapshot.version.clone();
+                let _ = save_manifest(&launcher_core::cdn_last_path(game_dir), &snapshot);
+                {
+                    let mut s = state.lock().await;
+                    s.update_status = UpdateStatus::Ok { version };
+                    s.manifest = Some(snapshot);
+                }
                 Some(r)
             } else {
                 None
@@ -2437,20 +2536,29 @@ pub async fn uninstall_game(state: &SharedState) -> Result<UninstallReportDto, S
 /// Check file freshness without downloading.
 pub async fn verify_files(state: &SharedState) -> Result<VerifyReportDto, String> {
     let manifest = ensure_manifest(state).await?;
-    let game_dir = state.lock().await.game_dir();
+    // Instantané unique sous un seul verrou court (évite deux prises).
+    let (game_dir, experimental, optimizations) = {
+        let s = state.lock().await;
+        (
+            s.game_dir(),
+            s.settings.experimental_runtime,
+            s.settings.experimental_optimizations,
+        )
+    };
     let planned = plan_downloads_for_current_os(&manifest, &game_dir);
-    let mut items: Vec<(PathBuf, u64, String)> = planned
-        .iter()
-        .map(|p| (p.dest.clone(), p.file.size, p.file.sha1.clone()))
-        .collect();
+    let mut items: Vec<(PathBuf, u64, String)> = Vec::with_capacity(planned.len() + 32);
+    items.extend(
+        planned
+            .iter()
+            .map(|p| (p.dest.clone(), p.file.size, p.file.sha1.clone())),
+    );
     // Mojang-side files from the offline cache (vanilla jar, per-OS
     // libraries, asset objects): no network, same freshness rules
     // (Log4j sidecar included — a patched jar never reports stale).
     items.extend(mojang_verify_items(&game_dir, &manifest));
     // Experimental set from its offline cache (upstream libs with real
     // hashes + presence checks for coremods and the Java 21 binary).
-    if state.lock().await.settings.experimental_runtime {
-        let optimizations = state.lock().await.settings.experimental_optimizations;
+    if experimental {
         items.extend(modern_verify_items(&game_dir, optimizations));
     }
     let report = tokio::task::spawn_blocking(move || {
@@ -2498,11 +2606,10 @@ fn mojang_verify_items(
     };
     let current = Os::current();
     let cdn_planned = launcher_core::plan_downloads(manifest, game_dir, current);
-    let skip_names: HashSet<String> = cdn_planned.iter().map(|p| p.file.name.clone()).collect();
-    let skip_bases: HashSet<String> = cdn_planned
-        .iter()
-        .map(|p| artifact_base(&p.file.name))
-        .collect();
+    let mut skip_names: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_names.extend(cdn_planned.iter().map(|p| p.file.name.clone()));
+    let mut skip_bases: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_bases.extend(cdn_planned.iter().map(|p| artifact_base(&p.file.name)));
     let vanilla = plan_vanilla_jar(&version, game_dir);
     items.push((vanilla.dest, vanilla.file.size, vanilla.file.sha1));
     let (regular, _) = plan_mojang_libraries(
@@ -2539,8 +2646,11 @@ fn mojang_verify_items(
 /// `{online: false, error}` — errors propagate, never fabricated.
 /// `tps` is always `None` (TPS non exposé par le ping).
 pub async fn get_server_status(_state: &SharedState) -> ServerStatusDto {
+    // Ping TCP avec timeout : gardé au premier affichage (la carte serveur
+    // de l'accueil en dépend), durée journalisée en une ligne.
+    let started = std::time::Instant::now();
     let address = format!("{MC_SERVER_HOST}:{MC_SERVER_PORT}");
-    match crate::server_status::ping_server(
+    let out = match crate::server_status::ping_server(
         MC_SERVER_HOST,
         MC_SERVER_PORT,
         crate::server_status::STATUS_TIMEOUT,
@@ -2559,14 +2669,21 @@ pub async fn get_server_status(_state: &SharedState) -> ServerStatusDto {
             error: None,
         },
         Err(e) => ServerStatusDto::offline(address, e),
-    }
+    };
+    boot_timing_log("statut serveur", started);
+    out
 }
 
-/// Patch-notes feed (newest first, max 5, never errors):
-/// local `CHANGELOG.md` + `"Version installée"` manifest summary +
-/// best-effort GitHub releases of `46Anarchy/FS-Patches` (failures degrade
-/// to local-only entries).
-pub async fn get_patch_notes(state: &SharedState) -> Vec<PatchNoteDto> {
+/// Patch-notes feed (newest first, max 5, never errors) + reachability
+/// verdict: local `CHANGELOG.md` + `"Version installée"` manifest summary +
+/// best-effort GitHub commits across 6 repos (failures degrade to
+/// local-only entries; total failure sets `unreachable` so the UI shows
+/// the muted offline hint instead of a silent empty state).
+pub async fn get_patch_notes(state: &SharedState) -> PatchNotesFeedDto {
+    // Lecture locale instantanée + fetch GitHub (6 dépôts en parallèle,
+    // 10 s + un réessai sur timeout — voir `remote_release_entries`) :
+    // gardé au premier affichage (la colonne notes de l'accueil en dépend).
+    let started = std::time::Instant::now();
     let (game_dir, manifest) = {
         let s = state.lock().await;
         (s.game_dir(), s.manifest.clone())
@@ -2577,8 +2694,13 @@ pub async fn get_patch_notes(state: &SharedState) -> Vec<PatchNoteDto> {
         .as_ref()
         .map(|m| m.version.clone())
         .unwrap_or_default();
-    let remote = crate::patch_notes::remote_release_entries().await;
-    crate::patch_notes::merge_patch_notes(remote, local, installed, &manifest_version)
+    let (remote, unreachable) = crate::patch_notes::remote_release_entries().await;
+    let notes = crate::patch_notes::merge_patch_notes(remote, local, installed, &manifest_version);
+    boot_timing_log(
+        &format!("notes de patch ({} entrée(s))", notes.len()),
+        started,
+    );
+    PatchNotesFeedDto { notes, unreachable }
 }
 
 // ---------------------------------------------------------------------------
@@ -2743,11 +2865,19 @@ pub const DISABLED_SUFFIX: &str = ".disabled";
 /// currently means "listed in the manifest". If the manifest ever gains an
 /// explicit flag, use it here instead of manifest membership.
 pub async fn get_mods_list(state: &SharedState) -> Result<Vec<ModInfo>, String> {
+    // Balayage disque + lecture `mcmod.info` de chaque jar (~70 zips) :
+    // gardé au premier affichage (la ligne « N mods » de l'accueil vient du
+    // nombre renvoyé), durée journalisée en une ligne. Les lectures zip sont
+    // locales et bornées — aucun réseau, rien à paralléliser au-delà du
+    // fan-out frontend déjà concurrent.
+    let started = std::time::Instant::now();
     let (game_dir, manifest) = {
         let s = state.lock().await;
         (s.game_dir(), s.manifest.clone())
     };
-    Ok(list_mods(&game_dir, manifest.as_ref()))
+    let out = list_mods(&game_dir, manifest.as_ref());
+    boot_timing_log(&format!("liste mods ({} mod(s))", out.len()), started);
+    Ok(out)
 }
 
 /// Enable/disable an optional mod by renaming `<id>` ↔ `<id>.disabled`
@@ -2889,50 +3019,51 @@ fn list_mods(game_dir: &Path, manifest: Option<&Manifest>) -> Vec<ModInfo> {
         }
     }
 
-    // Disk-only listing, required first then alphabetical.
-    let mut out: Vec<ModInfo> = on_disk
+    // Index par stem (O(1) par mod disque au lieu du balayage O(D×M)).
+    let by_stem: BTreeMap<String, (String, String)> = declared
         .iter()
-        .map(|(id, (file_name, disk_size))| {
-            let required = required_stems.contains(mod_stem(id));
-            let enabled = !file_name.ends_with(DISABLED_SUFFIX);
-            let (fallback_version, fallback_description) = declared
-                .iter()
-                .find(|(n, _)| mod_stem(n) == mod_stem(id))
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default();
-            let filename_display = mod_stem(id).replace(['_', '-'], " ");
-            let (display_name, version, description) = match read_mcmod_info(&dir.join(file_name)) {
-                Some((name, ver, desc)) => (
-                    if name.is_empty() {
-                        filename_display.clone()
-                    } else {
-                        name
-                    },
-                    if ver.is_empty() {
-                        fallback_version.clone()
-                    } else {
-                        ver
-                    },
-                    if desc.is_empty() {
-                        fallback_description.clone()
-                    } else {
-                        desc
-                    },
-                ),
-                None => (filename_display, fallback_version, fallback_description),
-            };
-            ModInfo {
-                id: id.clone(),
-                file_name: file_name.clone(),
-                display_name,
-                description,
-                version,
-                size: *disk_size,
-                required,
-                enabled,
-            }
-        })
+        .map(|(n, v)| (mod_stem(n).to_string(), v.clone()))
         .collect();
+    // Disk-only listing, required first then alphabetical.
+    let mut out: Vec<ModInfo> = Vec::with_capacity(on_disk.len());
+    out.extend(on_disk.iter().map(|(id, (file_name, disk_size))| {
+        let stem = mod_stem(id);
+        let required = required_stems.contains(stem);
+        let enabled = !file_name.ends_with(DISABLED_SUFFIX);
+        let (fallback_version, fallback_description) =
+            by_stem.get(stem).cloned().unwrap_or_default();
+        let filename_display = mod_stem(id).replace(['_', '-'], " ");
+        let (display_name, version, description) = match read_mcmod_info(&dir.join(file_name)) {
+            Some((name, ver, desc)) => (
+                if name.is_empty() {
+                    filename_display.clone()
+                } else {
+                    name
+                },
+                if ver.is_empty() {
+                    fallback_version.clone()
+                } else {
+                    ver
+                },
+                if desc.is_empty() {
+                    fallback_description.clone()
+                } else {
+                    desc
+                },
+            ),
+            None => (filename_display, fallback_version, fallback_description),
+        };
+        ModInfo {
+            id: id.clone(),
+            file_name: file_name.clone(),
+            display_name,
+            description,
+            version,
+            size: *disk_size,
+            required,
+            enabled,
+        }
+    }));
     out.sort_by(|a, b| b.required.cmp(&a.required).then(a.id.cmp(&b.id)));
     out
 }
@@ -3196,7 +3327,7 @@ async fn fetch_avatar_bytes(
 /// to its glyph (no error toasts).
 pub async fn get_avatar(state: &SharedState, uuid: String) -> Result<String, String> {
     let undashed = avatar_cache_key(&uuid).ok_or_else(|| "UUID invalide.".to_string())?;
-    eprintln!("[launcher] avatar uuid={undashed} requête");
+    crate::log_verbose!("[launcher] avatar uuid={undashed} requête");
     let path = {
         let s = state.lock().await;
         avatar_cache_path(&s.game_dir(), &undashed)
@@ -3204,7 +3335,7 @@ pub async fn get_avatar(state: &SharedState, uuid: String) -> Result<String, Str
     let cached = std::fs::read(&path).ok().filter(|b| is_valid_avatar_png(b));
     if let Some(ref bytes) = cached {
         if avatar_cache_fresh(&path) {
-            eprintln!(
+            crate::log_verbose!(
                 "[launcher] avatar uuid={undashed} cache=frais octets={} fournisseur=cache",
                 bytes.len()
             );
@@ -3213,7 +3344,7 @@ pub async fn get_avatar(state: &SharedState, uuid: String) -> Result<String, Str
     }
     match fetch_avatar_bytes(&http_client()?, &undashed).await {
         Some((bytes, provider)) => {
-            eprintln!(
+            crate::log_verbose!(
                 "[launcher] avatar uuid={undashed} cache=renouvelé octets={} fournisseur={provider}",
                 bytes.len()
             );
@@ -3225,13 +3356,15 @@ pub async fn get_avatar(state: &SharedState, uuid: String) -> Result<String, Str
         }
         None => {
             if let Some(bytes) = cached {
-                eprintln!(
+                crate::log_verbose!(
                     "[launcher] avatar uuid={undashed} cache=périmé-servi octets={} fournisseur=cache",
                     bytes.len()
                 );
                 return Ok(avatar_data_url(&bytes));
             }
-            eprintln!("[launcher] avatar uuid={undashed} cache=absent octets=0 fournisseur=aucun");
+            crate::log_verbose!(
+                "[launcher] avatar uuid={undashed} cache=absent octets=0 fournisseur=aucun"
+            );
             Err("Avatar indisponible.".to_string())
         }
     }
@@ -3347,18 +3480,17 @@ async fn set_pack_flavor_gated(
     if let Some(refusal) = crate::state::experimental_gate_rejects(experimental, gated) {
         return Err(refusal);
     }
-    let game_dir = {
+    // Écriture disque hors mutex : le verrou ne couvre que la mutation mémoire.
+    let (game_dir, merged) = {
         let mut s = state.lock().await;
         // Same roster-preserving merge as `save_settings` (the flavor
         // payload carries no accounts).
         s.settings.experimental_runtime = experimental;
         s.settings.experimental_optimizations = experimental;
-        let merged = s.settings.clone();
-        let game_dir = s.game_dir();
-        save_settings_file(&settings_path(&game_dir), &merged)
-            .map_err(|e| format!("Réglages : {e}"))?;
-        game_dir
+        (s.game_dir(), s.settings.clone())
     };
+    save_settings_file(&settings_path(&game_dir), &merged)
+        .map_err(|e| format!("Réglages : {e}"))?;
     let moved = launcher_core::prune_other_flavor(&game_dir, experimental);
     let lines = flavor_swap_lines(&moved, experimental);
     Ok(PackFlavorSwapDto {
@@ -3386,45 +3518,62 @@ pub async fn get_system_memory(_state: &SharedState) -> u64 {
 /// custom `java_path` override wins when set, else the flavor's runtime —
 /// GraalVM 21 on experimental, Temurin 8 on default (auto-managed).
 pub async fn check_java_status(state: &SharedState) -> JavaInfoDto {
-    let (path, check, warning) = {
+    // Sonde(s) `java -version` : le coût lent du démarrage (voir audit
+    // `refreshAll` — le frontend diffère cet appel après le premier
+    // affichage, l'onglet Java étant masqué au boot).
+    // Verrou court : on ne garde que les entrées (chemins + saveur), les
+    // sondes disque/processus (`resolve_modern_java`, `java8_status`,
+    // `check_java` → spawn `java -version`) tournent hors mutex.
+    let started = std::time::Instant::now();
+    enum Probe {
+        Override(PathBuf),
+        Modern(PathBuf),
+        Default(PathBuf),
+    }
+    let probe = {
         let s = state.lock().await;
-        let trimmed = s.settings.java_path.trim();
+        let trimmed = s.settings.java_path.trim().to_string();
         if !trimmed.is_empty() {
-            let path = PathBuf::from(trimmed);
+            Probe::Override(PathBuf::from(trimmed))
+        } else if s.settings.experimental_runtime {
+            Probe::Modern(s.game_dir())
+        } else {
+            Probe::Default(s.game_dir())
+        }
+    };
+    let (path, check, warning) = match probe {
+        Probe::Override(path) => {
             let check = check_java(&path);
             let warning = java_warning_for(&check);
             (path, check, warning)
-        } else if s.settings.experimental_runtime {
-            let game_dir = s.game_dir();
-            match launcher_core::resolve_modern_java(&game_dir) {
-                Some(bin) => {
-                    let check = check_java(&bin);
-                    let warning = if check.major == Some(launcher_core::MODERN_JAVA_MAJOR) {
-                        None
-                    } else {
-                        Some("GraalVM 21 invalide — réinstallez le runtime du modpack.".to_string())
-                    };
-                    (bin, check, warning)
-                }
-                None => {
-                    let bin = game_dir
-                        .join(launcher_core::MODERN_JAVA_DIR)
-                        .join("bin")
-                        .join(launcher_core::java_exe_name(launcher_core::Os::current()));
-                    let check = check_java(&bin);
-                    (
-                        bin,
-                        check,
-                        Some(
-                            "GraalVM 21 non installé — cliquez Installer pour le télécharger."
-                                .to_string(),
-                        ),
-                    )
-                }
+        }
+        Probe::Modern(game_dir) => match launcher_core::resolve_modern_java(&game_dir) {
+            Some(bin) => {
+                let check = check_java(&bin);
+                let warning = if check.major == Some(launcher_core::MODERN_JAVA_MAJOR) {
+                    None
+                } else {
+                    Some("GraalVM 21 invalide — réinstallez le runtime du modpack.".to_string())
+                };
+                (bin, check, warning)
             }
-        } else {
-            let game_dir = s.game_dir();
-            // Drop the guard before spawning `java -version` below.
+            None => {
+                let bin = game_dir
+                    .join(launcher_core::MODERN_JAVA_DIR)
+                    .join("bin")
+                    .join(launcher_core::java_exe_name(launcher_core::Os::current()));
+                let check = check_java(&bin);
+                (
+                    bin,
+                    check,
+                    Some(
+                        "GraalVM 21 non installé — cliquez Installer pour le télécharger."
+                            .to_string(),
+                    ),
+                )
+            }
+        },
+        Probe::Default(game_dir) => {
             let status = java8_status(&game_dir);
             let path = status.path;
             let check = check_java(&path);
@@ -3432,12 +3581,14 @@ pub async fn check_java_status(state: &SharedState) -> JavaInfoDto {
             (path, check, warning)
         }
     };
-    JavaInfoDto {
+    let out = JavaInfoDto {
         path: path.to_string_lossy().into_owned(),
         major: check.major,
         is_java8: check.is_java8,
         warning,
-    }
+    };
+    boot_timing_log("sonde java", started);
+    out
 }
 
 /// Download the Temurin 8 JRE (~100MB) and install it into `<gameDir>/java`
@@ -3664,6 +3815,9 @@ pub async fn play_with_outcome(
         }
     }
 
+    // Construction du lancement hors mutex : l'instantané est cloné sous
+    // un verrou court, tout le travail lourd (classpath + balayage
+    // bytecode des jars) tourne verrou relâché.
     let (argv, dir, mut warnings) = {
         // Prism-style freshness: relaunch the refresh chain when the
         // ACTIVE in-memory session is older than the Minecraft token
@@ -3678,7 +3832,8 @@ pub async fn play_with_outcome(
         if stale {
             refresh_session(state).await?;
         }
-        state.lock().await.launch_argv()?
+        let (manifest, session, game_dir, settings) = state.lock().await.launch_snapshot()?;
+        crate::state::AppState::launch_argv_from(&manifest, &session, &game_dir, &settings)?
     };
     warnings.extend(bytecode_warnings);
     let console_live = state.lock().await.settings.console_live;
@@ -3710,7 +3865,7 @@ pub async fn play_with_outcome(
 
 /// Lignes de console conservées par lancement (garde-fou mémoire : un mod
 /// bavard ne fait jamais gonfler l'onglet Console sans limite).
-pub const GAME_TAIL_MAX_LINES: usize = 20_000;
+pub const GAME_TAIL_MAX_LINES: usize = 2_000;
 /// Largeur max d'une ligne console (`…` au-delà, comme avant).
 pub const GAME_TAIL_LINE_CHARS: usize = 500;
 /// Scrutation du journal console + du processus jeu.
@@ -3806,7 +3961,7 @@ pub fn spawn_detached_game(
     // selected » est attribuable d'un coup d'œil.
     {
         let tokens = crate::state::gc_spawn_tokens(argv);
-        eprintln!(
+        crate::log_verbose!(
             "[launcher] collecteurs GC au lancement : {}",
             if tokens.is_empty() {
                 "aucun sélecteur".to_string()
@@ -3940,7 +4095,7 @@ async fn watch_game(mut child: tokio::process::Child, mut watch: GameWatch) {
                 if !running_reported && watch.started.elapsed().as_secs() >= RUNNING_GRACE_SECS {
                     running_reported = true;
                     if let Some(outcome) = watch.outcome.as_ref() {
-                        eprintln!(
+                        crate::log_verbose!(
                             "[launcher] game-outcome running émis (PID {}).",
                             watch.pid
                         );
@@ -3990,10 +4145,20 @@ async fn finish_game_exit(watch: &GameWatch, code: Option<i32>) {
         let code_s = code
             .map(|c| c.to_string())
             .unwrap_or_else(|| "?".to_string());
-        eprintln!(
-            "[launcher] game-outcome exited émis (PID {}, code {code_s}).",
-            watch.pid
-        );
+        // Sortie nominale (`code 0`) : routine, derrière le gate. Toute
+        // autre fin (code non nul ou inconnu) est anormale : toujours
+        // imprimée, comme les plantages.
+        if matches!(code, Some(0)) {
+            crate::log_verbose!(
+                "[launcher] game-outcome exited émis (PID {}, code {code_s}).",
+                watch.pid
+            );
+        } else {
+            eprintln!(
+                "[launcher] game-outcome exited émis (PID {}, code {code_s}).",
+                watch.pid
+            );
+        }
         outcome(decide_game_outcome(true, None, code, watch.pid));
     }
 }
@@ -4324,7 +4489,10 @@ pub async fn prepare_install_emit(
     emit: Option<Arc<ProgressEmitter>>,
 ) -> Option<Arc<ProgressEmitter>> {
     let store = state.lock().await.last_install_progress.clone();
-    store.lock().expect("magasin install-progress empoisonné").take();
+    store
+        .lock()
+        .expect("magasin install-progress empoisonné")
+        .take();
     Some(Arc::new(move |p: ProgressPayload| {
         *store.lock().expect("magasin install-progress empoisonné") = Some(p.clone());
         if let Some(inner) = &emit {
@@ -4668,6 +4836,56 @@ mod tests {
         assert!(state.lock().await.java_cancel.load(Ordering::Relaxed));
     }
 
+    fn pending_device(code: &str) -> launcher_auth::DeviceCodeResponse {
+        launcher_auth::DeviceCodeResponse {
+            user_code: "ABCD-EFGH".to_string(),
+            device_code: code.to_string(),
+            verification_uri: "https://www.microsoft.com/link".to_string(),
+            verification_uri_complete: None,
+            expires_in: 900,
+            interval: 5,
+            message: "message".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_login_clears_pending_without_error() {
+        let (state, _dir) = state_with_tmp();
+        state.lock().await.pending_login = Some(pending_device("device-1"));
+        cancel_login(&state).await.unwrap();
+        assert!(state.lock().await.pending_login.is_none());
+        // Idempotent sans connexion en cours.
+        cancel_login(&state).await.unwrap();
+    }
+
+    #[test]
+    fn login_cancel_guard_rejects_cleared_and_replaced() {
+        // Demande effacée → annulée.
+        let err = ensure_login_not_cancelled(None, "device-1").unwrap_err();
+        assert!(err.contains("annulée"), "unexpected: {err}");
+        // Demande remplacée (nouveau `request_login`) → annulée.
+        let other = pending_device("device-2");
+        let err = ensure_login_not_cancelled(Some(&other), "device-1").unwrap_err();
+        assert!(err.contains("annulée"), "unexpected: {err}");
+        // Même demande → pas d'erreur.
+        let same = pending_device("device-1");
+        ensure_login_not_cancelled(Some(&same), "device-1").unwrap();
+    }
+
+    #[tokio::test]
+    async fn login_cancel_watcher_resolves_on_clear() {
+        // Hermétique : la garde ne touche jamais le réseau.
+        let (state, _dir) = state_with_tmp();
+        state.lock().await.pending_login = Some(pending_device("device-1"));
+        cancel_login(&state).await.unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            wait_for_login_cancel(state.clone(), "device-1".to_string()),
+        )
+        .await
+        .expect("la garde doit résoudre après annulation");
+    }
+
     #[tokio::test]
     async fn pre_cancelled_install_aborts_without_network() {
         // Flag set before the run: every task bails (or the drain aborts)
@@ -4847,9 +5065,10 @@ mod tests {
         let seen: Arc<std::sync::Mutex<Vec<JavaProgressPayload>>> =
             Arc::new(std::sync::Mutex::new(Vec::new()));
         let probe = seen.clone();
-        let emit: Option<Arc<JavaProgressEmitter>> = Some(Arc::new(move |p: JavaProgressPayload| {
-            probe.lock().unwrap().push(p);
-        }));
+        let emit: Option<Arc<JavaProgressEmitter>> =
+            Some(Arc::new(move |p: JavaProgressPayload| {
+                probe.lock().unwrap().push(p);
+            }));
         let tracked = prepare_java_emit(&state, emit).await;
         assert!(get_java_progress(&state).await.is_none());
         let p = JavaProgressPayload::from_bytes(50, 200);
@@ -4865,7 +5084,9 @@ mod tests {
         use crate::state::ProgressPayload;
         let (state, _dir) = state_with_tmp();
         let (emit, seen) = recording_emit();
-        let tracked = prepare_install_emit(&state, emit).await.expect("enveloppe présente");
+        let tracked = prepare_install_emit(&state, emit)
+            .await
+            .expect("enveloppe présente");
         for i in 1..=3usize {
             tracked(ProgressPayload {
                 completed_files: i,
@@ -4879,7 +5100,9 @@ mod tests {
         }
         // Le magasin garde la DERNIÈRE émission (le sondage rejoue le
         // dernier état, jamais l'historique) ; l'événement a tout vu.
-        let last = get_install_progress(&state).await.expect("payload sondable");
+        let last = get_install_progress(&state)
+            .await
+            .expect("payload sondable");
         assert_eq!(last.completed_files, 3);
         assert_eq!(last.current_file, "mods/f3.jar");
         assert_eq!(seen.lock().unwrap().len(), 3);
@@ -4891,7 +5114,9 @@ mod tests {
         // sondable est quand même alimenté à chaque appel.
         use crate::state::ProgressPayload;
         let (state, _dir) = state_with_tmp();
-        let tracked = prepare_install_emit(&state, None).await.expect("enregistreur seul");
+        let tracked = prepare_install_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         let p = ProgressPayload {
             completed_files: 2,
             total_files: 4,
@@ -4909,7 +5134,9 @@ mod tests {
     async fn java_emit_records_without_inner_emitter() {
         // Même contrat côté Java : sans émetteur, le sondage voit quand même.
         let (state, _dir) = state_with_tmp();
-        let tracked = prepare_java_emit(&state, None).await.expect("enregistreur seul");
+        let tracked = prepare_java_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         let p = JavaProgressPayload::from_bytes(60, 200);
         tracked(p.clone());
         assert_eq!(get_java_progress(&state).await, Some(p));
@@ -4919,7 +5146,9 @@ mod tests {
     async fn console_tail_ring_bounded_and_cursor() {
         // Anneau borné à 500 lignes, curseur monotone, sémantique `since`.
         let (state, _dir) = state_with_tmp();
-        let tracked = prepare_console_emit(&state, None).await.expect("enregistreur seul");
+        let tracked = prepare_console_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         for i in 0..600usize {
             tracked(format!("ligne {i}"));
         }
@@ -4948,10 +5177,14 @@ mod tests {
         // Nouveau lancement : anneau vidé mais curseur monotone — un curseur
         // de l'ancien run reste valide et ne ressert que le neuf.
         let (state, _dir) = state_with_tmp();
-        let first = prepare_console_emit(&state, None).await.expect("enregistreur seul");
+        let first = prepare_console_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         first("ancien".to_string());
         assert_eq!(get_console_tail(&state, 0).await.next, 1);
-        let second = prepare_console_emit(&state, None).await.expect("enregistreur seul");
+        let second = prepare_console_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         second("neuf".to_string());
         // Curseur 1 (fin de l'ancien run) : seule la ligne neuve ressert.
         let tail = get_console_tail(&state, 1).await;
@@ -4965,14 +5198,11 @@ mod tests {
         // sans émetteur, oublié au lancement suivant.
         let (state, _dir) = state_with_tmp();
         assert!(get_last_outcome(&state).await.is_none());
-        let tracked = prepare_outcome_emit(&state, None).await.expect("enregistreur seul");
+        let tracked = prepare_outcome_emit(&state, None)
+            .await
+            .expect("enregistreur seul");
         assert!(get_last_outcome(&state).await.is_none());
-        let crashed = decide_game_outcome(
-            true,
-            Some("Caused by: boom".to_string()),
-            Some(1),
-            4242,
-        );
+        let crashed = decide_game_outcome(true, Some("Caused by: boom".to_string()), Some(1), 4242);
         assert_eq!(crashed.status, "crashed");
         tracked(crashed.clone());
         assert_eq!(get_last_outcome(&state).await, Some(crashed));
@@ -4991,7 +5221,9 @@ mod tests {
         let emit: Option<Arc<OutcomeEmitter>> = Some(Arc::new(move |o: GameOutcomeDto| {
             probe.lock().unwrap().push(o);
         }));
-        let tracked = prepare_outcome_emit(&state, emit).await.expect("enveloppe présente");
+        let tracked = prepare_outcome_emit(&state, emit)
+            .await
+            .expect("enveloppe présente");
         let exited = decide_game_outcome(true, None, Some(0), 7);
         tracked(exited.clone());
         assert_eq!(get_last_outcome(&state).await, Some(exited));
@@ -6138,7 +6370,10 @@ mod tests {
         );
         // Tout est présent et frais : la boucle de vérification ne fait que
         // re-hacher, sans jamais toucher le réseau.
-        for (name, body) in [("alpha.jar", &bodies["/alpha.jar"]), ("beta.jar", &bodies["/beta.jar"])] {
+        for (name, body) in [
+            ("alpha.jar", &bodies["/alpha.jar"]),
+            ("beta.jar", &bodies["/beta.jar"]),
+        ] {
             let dest = cdn_plan_for_mode(&m, dir.path(), false)
                 .into_iter()
                 .find(|p| p.file.name == name)
@@ -6155,12 +6390,19 @@ mod tests {
             .await
             .expect("monde tout-présent se vérifie sans réseau");
         assert_eq!(
-            (summary.total_files, summary.downloaded_files, summary.skipped_files),
+            (
+                summary.total_files,
+                summary.downloaded_files,
+                summary.skipped_files
+            ),
             (2, 0, 2),
             "tout est frais : zéro téléchargement"
         );
         let seen = seen.lock().unwrap();
-        assert!(!seen.is_empty(), "la vérification doit émettre, pas compter en silence");
+        assert!(
+            !seen.is_empty(),
+            "la vérification doit émettre, pas compter en silence"
+        );
         // Première émission = première fin de contrôle, pas un résumé groupé.
         let first = &seen[0];
         assert_eq!(
@@ -6760,7 +7002,13 @@ mod tests {
         .collect();
         let (base, srv) = stub_server(bodies).await;
         let dir = tempfile::tempdir().unwrap();
-        let m = stub_manifest(&base, &[("present.jar", &present_body), ("missing.jar", &missing_body)]);
+        let m = stub_manifest(
+            &base,
+            &[
+                ("present.jar", &present_body),
+                ("missing.jar", &missing_body),
+            ],
+        );
         let mods = launcher_core::mods_dir(dir.path());
         std::fs::create_dir_all(&mods).unwrap();
         // Présent mais corrompu : le comblement ne doit pas le réparer.
@@ -6769,7 +7017,10 @@ mod tests {
         assert!(cdn_content_stale(&m, dir.path(), false));
         let missing = missing_content_files(&m, dir.path(), false);
         assert_eq!(
-            missing.iter().map(|p| p.file.name.as_str()).collect::<Vec<_>>(),
+            missing
+                .iter()
+                .map(|p| p.file.name.as_str())
+                .collect::<Vec<_>>(),
             vec!["missing.jar"]
         );
         let summary = {
@@ -6811,7 +7062,11 @@ mod tests {
             run_planned(Vec::new(), &run, None).await.unwrap()
         };
         assert_eq!(
-            (summary.total_files, summary.downloaded_files, summary.skipped_files),
+            (
+                summary.total_files,
+                summary.downloaded_files,
+                summary.skipped_files
+            ),
             (0, 0, 0)
         );
         assert!(!mods.join("optmod.jar").exists());
@@ -6916,7 +7171,10 @@ mod tests {
         let one = vec![0xA5u8; 64];
         let two = vec![0x3Cu8; 32];
         let dir = tempfile::tempdir().unwrap();
-        let m = stub_manifest("http://example.invalid", &[("one.jar", &one), ("two.jar", &two)]);
+        let m = stub_manifest(
+            "http://example.invalid",
+            &[("one.jar", &one), ("two.jar", &two)],
+        );
         let mods = launcher_core::mods_dir(dir.path());
         std::fs::create_dir_all(&mods).unwrap();
         std::fs::write(mods.join("one.jar"), &one).unwrap();
@@ -6930,7 +7188,11 @@ mod tests {
             run_planned(missing, &run, None).await.unwrap()
         };
         assert_eq!(
-            (summary.total_files, summary.downloaded_files, summary.skipped_files),
+            (
+                summary.total_files,
+                summary.downloaded_files,
+                summary.skipped_files
+            ),
             (0, 0, 0)
         );
     }
@@ -6965,10 +7227,17 @@ mod tests {
             Path::new("C:/Users/u/.46anarchy/paladium"),
         ));
         // Processus étrangers : jamais le jeu (garde anti recyclage de PID).
-        assert!(!cmdline_is_game(&["sleep".to_string(), "60".to_string()], game));
+        assert!(!cmdline_is_game(
+            &["sleep".to_string(), "60".to_string()],
+            game
+        ));
         assert!(!cmdline_is_game(&[], game));
         assert!(!cmdline_is_game(
-            &["java".to_string(), "-jar".to_string(), "autre.jar".to_string()],
+            &[
+                "java".to_string(),
+                "-jar".to_string(),
+                "autre.jar".to_string()
+            ],
             game,
         ));
     }
@@ -7099,12 +7368,12 @@ mod tests {
         // Contrat frontend/backend du sondage `get_game_status` : `main.js`
         // `pollGameStatus` lit `st.running` (minuscule — un renommage fige
         // silencieusement le bouton « En jeu »).
-        let value =
-            serde_json::to_value(&crate::state::GameStatusDto { running: true }).unwrap();
+        let value = serde_json::to_value(&crate::state::GameStatusDto { running: true }).unwrap();
         let obj = value.as_object().unwrap();
         assert_eq!(obj.len(), 1, "aucun champ parasite : {obj:?}");
         assert_eq!(obj["running"], serde_json::json!(true));
-        let back: crate::state::GameStatusDto = serde_json::from_str(r#"{"running":false}"#).unwrap();
+        let back: crate::state::GameStatusDto =
+            serde_json::from_str(r#"{"running":false}"#).unwrap();
         assert!(!back.running);
     }
 

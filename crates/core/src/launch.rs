@@ -184,8 +184,9 @@ pub fn classpath_separator(os: Os) -> char {
 /// plan + déduplication [`crate::integrity::plan_dedupe_key`]).
 pub fn classpath_jar_paths(manifest: &Manifest, game_dir: &Path, os: Os) -> Vec<PathBuf> {
     use std::collections::HashSet;
-    let mut seen: HashSet<(String, String, String, String)> = HashSet::new();
-    let mut out = Vec::new();
+    let mut seen: HashSet<(String, String, String, String)> =
+        HashSet::with_capacity(manifest.files.len());
+    let mut out = Vec::with_capacity(manifest.files.len().min(512));
     for file in &manifest.files {
         if crate::integrity::is_palaforge_file(file) {
             continue;
@@ -243,18 +244,25 @@ pub fn build_classpath(manifest: &Manifest, game_dir: &Path, os: Os) -> String {
         .into_iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
+    // Déduplication O(1) (le `contains` linéaire coûtait O(N²) sur ~500
+    // entrées) sans réordonner : le premier gagne, l'ordre FML reste stable.
+    let mut seen: std::collections::HashSet<String> =
+        std::collections::HashSet::with_capacity(entries.len() + 16);
+    seen.extend(entries.iter().cloned());
     // Mojang regular-library fill (vanilla LWJGL on Linux/macOS — la copie
     // CDN est patchée et exclue du plan sur ces OS). Read from the offline
     // cache, no network.
-    entries.extend(crate::mojang::mojang_classpath_entries(
-        manifest, game_dir, os,
-    ));
+    for e in crate::mojang::mojang_classpath_entries(manifest, game_dir, os) {
+        if seen.insert(e.clone()) {
+            entries.push(e);
+        }
+    }
     // Official Forge 1614 universal (Forge Maven, standard layout under
     // `libraries/`): on the classpath when provisioned, before vanilla.
     let forge = crate::mojang::forge_universal_dest(game_dir);
     if forge.is_file() {
         let s = forge.to_string_lossy().into_owned();
-        if !entries.contains(&s) {
+        if seen.insert(s.clone()) {
             entries.push(s);
         }
     }
@@ -265,16 +273,9 @@ pub fn build_classpath(manifest: &Manifest, game_dir: &Path, os: Os) -> String {
         .join(format!("{}.jar", manifest.mc_version));
     if vanilla.is_file() {
         let s = vanilla.to_string_lossy().into_owned();
-        if !entries.contains(&s) {
+        if seen.insert(s.clone()) {
             entries.push(s);
         }
-    }
-    // Déduplication finale (remplissage Mojang + CDN même artefact) sans
-    // réordonner : le premier gagne, l'ordre FML reste stable.
-    {
-        use std::collections::HashSet;
-        let mut seen = HashSet::new();
-        entries.retain(|e| seen.insert(e.clone()));
     }
     order_asm_compat(&mut entries);
     entries.join(&sep.to_string())
@@ -748,5 +749,37 @@ mod tests {
             (defaults.memory_min.as_str(), defaults.memory_max.as_str()),
             ("1G", "4G")
         );
+    }
+
+    #[test]
+    fn classpath_dedupe_keeps_first_order_without_quadratic_scan() {
+        // Garde anti-régression de la déduplication O(1) : doublons CDN +
+        // remplissage Mojang + Forge/vanilla provisionnés — le premier gagne,
+        // l'ordre FML reste stable, sans doublon.
+        let m = parse_manifest(JSON).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path();
+        let forge = crate::mojang::forge_universal_dest(game);
+        std::fs::create_dir_all(forge.parent().unwrap()).unwrap();
+        std::fs::write(&forge, b"forge").unwrap();
+        let vanilla = crate::instance::versions_dir(game)
+            .join("1.7.10")
+            .join("1.7.10.jar");
+        std::fs::create_dir_all(vanilla.parent().unwrap()).unwrap();
+        std::fs::write(&vanilla, b"vanilla").unwrap();
+        for os in [Os::Linux, Os::Windows] {
+            let cp = build_classpath(&m, game, os);
+            let sep = classpath_separator(os);
+            let entries: Vec<&str> = cp.split(sep).filter(|s| !s.is_empty()).collect();
+            let mut seen = std::collections::HashSet::new();
+            assert!(
+                entries.iter().all(|e| seen.insert(*e)),
+                "aucun doublon au classpath : {cp}"
+            );
+            // Forge avant vanilla quand les deux sont provisionnés.
+            if let (Some(pf), Some(pv)) = (cp.find("universal.jar"), cp.find("1.7.10.jar")) {
+                assert!(pf < pv, "forge avant vanilla : {cp}");
+            }
+        }
     }
 }

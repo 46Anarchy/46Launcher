@@ -62,6 +62,7 @@
           Se connecter avec Microsoft
         </button>
         <p id="login-error" class="error hidden"></p>
+        <button id="btn-cancel-login" class="btn btn-ghost btn-block" type="button">Annuler</button>
       </div>
       <div id="device-panel" class="hidden">
         <ol class="steps">
@@ -83,6 +84,7 @@
         <div class="spinner" aria-hidden="true"></div>
         <p id="device-error" class="error hidden"></p>
         <button id="btn-retry-login" class="btn btn-primary btn-block hidden" type="button">Relancer la connexion</button>
+        <button id="btn-cancel-login-device" class="btn btn-ghost btn-block" type="button">Annuler</button>
       </div>
     </div>
   </div>
@@ -216,8 +218,9 @@
                 <h2>Notes de patch</h2>
                 <button class="link-btn" id="btn-changelog" type="button">Historique complet →</button>
               </div>
+              <p class="sub patch-sub" id="patch-notes-subtitle" aria-live="polite"></p>
               <div class="patch-stack" id="patch-notes">
-                <div class="card patch-card">
+                <div class="card patch-card patch-loading">
                   <h3>Chargement…</h3>
                   <p>Récupération des notes de patch…</p>
                 </div>
@@ -414,7 +417,6 @@
 
   <!-- Bottom Tauri status bar -->
   <footer class="statusbar">
-    <span class="dot" id="foot-dot"></span>
     <span id="stat-version">—</span>
     <span>•</span>
     <span id="stat-status">—</span>

@@ -553,11 +553,10 @@ pub fn mojang_classpath_entries(
         return Vec::new();
     };
     let cdn_planned = crate::integrity::plan_downloads(manifest, game_dir, current);
-    let skip_names: HashSet<String> = cdn_planned.iter().map(|p| p.file.name.clone()).collect();
-    let skip_bases: HashSet<String> = cdn_planned
-        .iter()
-        .map(|p| artifact_base(&p.file.name))
-        .collect();
+    let mut skip_names: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_names.extend(cdn_planned.iter().map(|p| p.file.name.clone()));
+    let mut skip_bases: HashSet<String> = HashSet::with_capacity(cdn_planned.len());
+    skip_bases.extend(cdn_planned.iter().map(|p| artifact_base(&p.file.name)));
     let (regular, native_jars) = plan_mojang_libraries(
         &version,
         game_dir,

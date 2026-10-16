@@ -15,7 +15,7 @@ use crate::commands::{self, new_shared_state, JavaProgressEmitter, ProgressEmitt
 use crate::state::{
     AccountInfoDto, BuildInfoDto, ConsoleTailDto, DeviceCodeInfo, GameOutcomeDto, GameStatusDto,
     InstallSummaryDto, JavaInfoDto, JavaProgressPayload, JavaRuntimesDto, ManifestStatusDto,
-    ModInfo, PackFlavorSwapDto, PatchNoteDto, PlayResultDto, ProgressPayload, ServerStatusDto,
+    ModInfo, PackFlavorSwapDto, PatchNotesFeedDto, PlayResultDto, ProgressPayload, ServerStatusDto,
     SessionInfo, SettingsDto, UninstallReportDto, VerifyReportDto, VersionInfo,
 };
 
@@ -184,6 +184,13 @@ pub async fn poll_login(state: State<'_, TauriState>) -> Result<SessionInfo, Str
 }
 
 #[tauri::command]
+/// Abort the in-flight device-code login, if any (login modal `Annuler`).
+/// Best-effort: always succeeds, even when idle.
+pub async fn cancel_login(state: State<'_, TauriState>) -> Result<(), String> {
+    commands::cancel_login(&state.inner).await
+}
+
+#[tauri::command]
 /// Restore a session from the keyring refresh token.
 pub async fn refresh_session(state: State<'_, TauriState>) -> Result<SessionInfo, String> {
     commands::refresh_session(&state.inner).await
@@ -344,8 +351,8 @@ pub async fn get_server_status(state: State<'_, TauriState>) -> Result<ServerSta
 }
 
 #[tauri::command]
-/// Patch-notes feed (newest first, max 5, never errors).
-pub async fn get_patch_notes(state: State<'_, TauriState>) -> Result<Vec<PatchNoteDto>, String> {
+/// Patch-notes feed + reachability verdict (newest first, max 5, never errors).
+pub async fn get_patch_notes(state: State<'_, TauriState>) -> Result<PatchNotesFeedDto, String> {
     Ok(commands::get_patch_notes(&state.inner).await)
 }
 
@@ -362,6 +369,50 @@ pub async fn get_build_info() -> BuildInfoDto {
     commands::get_build_info().await
 }
 
+/// Linux-only per-view WebKit RAM diet for the main window.
+///
+/// Single-page launcher with zero canvas/WebGL/audio/video (verified by grep
+/// over `frontend/dist`: no `<canvas` / `<audio` / `<video` / `AudioContext` /
+/// `WebGL`), so every media/GL/page-cache subsystem below is dead weight.
+/// REVERT: delete this fn + its call in `run_app` setup + the `webkit2gtk`
+/// dep in `crates/ui/Cargo.toml` — WebKit defaults return, nothing persisted.
+#[cfg(target_os = "linux")]
+fn apply_webkit_ram_settings(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    use webkit2gtk::{SettingsExt, WebViewExt};
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.with_webview(|webview| {
+        let view: webkit2gtk::WebView = webview.inner();
+        let Some(settings) = view.settings() else {
+            return;
+        };
+        // No back/forward navigation in a single-page launcher: the page
+        // cache only pins dead DOM/pages in RAM.
+        settings.set_enable_page_cache(false);
+        // No `<audio>` / `AudioContext` in the UI: WebAudio graphs + threads.
+        settings.set_enable_webaudio(false);
+        // No `<canvas>` / WebGL in the UI: GL shaders + GPU buffers.
+        settings.set_enable_webgl(false);
+        // No camera/mic capture UI: media-stream capture machinery.
+        settings.set_enable_media_stream(false);
+        // No streaming `<video>` playback: Media Source buffers.
+        settings.set_enable_mediasource(false);
+        // No DRM video: Encrypted Media CDM modules.
+        settings.set_enable_encrypted_media(false);
+        // No peer connections: WebRTC threads + ICE/network churn.
+        settings.set_enable_webrtc(false);
+        // NOTE (wheel-debug): `hardware-acceleration-policy=NEVER` (CPU
+        // raster, ~20MB saved) was reverted to the WebKit default while
+        // chasing dead mouse-wheel scrolling — see README Troubleshooting.
+        // To re-enable: `settings.set_hardware_acceleration_policy(
+        // HardwareAccelerationPolicy::Never);` (needs `HardwareAccelerationPolicy`
+        // in the `webkit2gtk` import above).
+    });
+}
+
 /// Run the 46Anarchy Tauri app (blocks until the window closes).
 pub fn run_app() -> Result<(), String> {
     let inner = new_shared_state();
@@ -369,6 +420,13 @@ pub fn run_app() -> Result<(), String> {
     tauri::Builder::default()
         .manage(TauriState { inner })
         .setup(|app| {
+            // Per-view WebKit RAM diet (Linux-only; other platforms compile
+            // untouched). First in setup — before any content loads — so the
+            // settings are in place for the first paint.
+            // REVERT: delete this call + `apply_webkit_ram_settings` + the
+            // `webkit2gtk` dep in `crates/ui/Cargo.toml`.
+            #[cfg(target_os = "linux")]
+            apply_webkit_ram_settings(app.handle());
             // Silent restore BEFORE the frontend initializes: by the time
             // the first `get_session` poll lands, auth state is settled —
             // the login modal can never flash over a session that is still
@@ -387,16 +445,33 @@ pub fn run_app() -> Result<(), String> {
             // que le premier affichage — jamais le travail : un succès tardif
             // referme quand même la modale via l'événement existant, un échec
             // tardif laisse la modale (affichée à raison) en place.
+            //
+            // Chronométrage permanent (une poignée de lignes par démarrage,
+            // jamais de bruit) : début/fin du setup + durée de restauration.
+            let setup_started = std::time::Instant::now();
+            eprintln!(
+                "[launcher] démarrage setup t={}ms",
+                crate::state::boot_wall_ms()
+            );
             let handle = app.handle().clone();
             let (settled_tx, settled_rx) = tokio::sync::oneshot::channel::<()>();
             tauri::async_runtime::spawn(async move {
+                let restore_started = std::time::Instant::now();
                 match commands::refresh_session(&restore).await {
                     Ok(info) => {
-                        eprintln!("[launcher] session restaurée : {}", info.name);
+                        eprintln!(
+                            "[launcher] démarrage restauration session '{}' en {} ms t={}ms",
+                            info.name,
+                            restore_started.elapsed().as_millis(),
+                            crate::state::boot_wall_ms()
+                        );
                         let _ = handle.emit("session-changed", &info);
                     }
                     Err(e) => {
-                        eprintln!("[launcher] restauration de session impossible : {e}");
+                        eprintln!(
+                            "[launcher] restauration de session impossible en {} ms : {e}",
+                            restore_started.elapsed().as_millis()
+                        );
                     }
                 }
                 let _ = settled_tx.send(());
@@ -409,6 +484,11 @@ pub fn run_app() -> Result<(), String> {
                     "[launcher] restauration de session : délai dépassé, démarrage sans session (la restauration continue en tâche de fond)."
                 );
             }
+            eprintln!(
+                "[launcher] démarrage setup fin en {} ms t={}ms",
+                setup_started.elapsed().as_millis(),
+                crate::state::boot_wall_ms()
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -432,6 +512,7 @@ pub fn run_app() -> Result<(), String> {
             download_graalvm21,
             request_login,
             poll_login,
+            cancel_login,
             refresh_session,
             logout,
             get_accounts,

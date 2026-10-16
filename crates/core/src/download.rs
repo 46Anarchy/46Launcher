@@ -164,17 +164,23 @@ async fn needs_update_blocking(dest: PathBuf, size: u64, sha1: String) -> Result
 /// `true` when `dest` is a file that must be executable on unix:
 /// anything under `java/bin/` plus `natives/*.so`.
 fn should_make_executable(dest: &Path) -> bool {
-    let parts: Vec<String> = dest
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect();
-    if parts.len() >= 3 {
-        let n = parts.len();
-        if parts[n - 3] == "java" && parts[n - 2] == "bin" {
-            return true;
-        }
+    // Sans allocation : inspection des composants (appelé une fois par
+    // fichier téléchargé/vérifié — ~500× par run).
+    if dest
+        .parent()
+        .and_then(|p| p.file_name())
+        .is_some_and(|n| n == "bin")
+        && dest
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.file_name())
+            .is_some_and(|n| n == "java")
+    {
+        return true;
     }
-    if dest.extension().is_some_and(|e| e == "so") && parts.iter().any(|p| p == "natives") {
+    if dest.extension().is_some_and(|e| e == "so")
+        && dest.components().any(|c| c.as_os_str() == "natives")
+    {
         return true;
     }
     false
@@ -713,5 +719,18 @@ pub(crate) mod tests {
         assert_eq!(last.current_bytes, 0);
         assert!(!last.skipped);
         assert_eq!(&std::fs::read(dir.path().join("big.jar")).unwrap(), &body);
+    }
+
+    #[test]
+    fn executable_bit_rule_without_per_file_allocation() {
+        // Garde anti-régression de `should_make_executable` sans allocation :
+        // mêmes verdicts que l'ancienne forme `Vec<String>` par fichier.
+        assert!(should_make_executable(Path::new("/g/java/bin/java")));
+        assert!(should_make_executable(Path::new("/g/java/bin/javaw.exe")));
+        assert!(!should_make_executable(Path::new("/g/java/lib/tools.jar")));
+        assert!(!should_make_executable(Path::new("/g/libraries/a.jar")));
+        assert!(should_make_executable(Path::new("/g/natives/liblwjgl.so")));
+        assert!(!should_make_executable(Path::new("/g/natives/readme.txt")));
+        assert!(!should_make_executable(Path::new("/g/mods/a.jar")));
     }
 }

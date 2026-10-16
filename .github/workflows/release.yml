@@ -37,12 +37,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux ships TWO x86-64 microarch variants from the same commit:
+          # `baseline` (default target, max compat) and `v3`
+          # (RUSTFLAGS="-C target-cpu=x86-64-v3": AVX/AVX2/BMI1-2/FMA/LZCNT/
+          # MOVBE/OSXSAVE, ~2013+ CPUs). Baseline artifacts keep their
+          # current names; v3 ones get a `-v3` infix before the arch via the
+          # post-build rename step below (Tauri has no filename knob), and
+          # both sets are attached to the same draft release.
+          # Windows/macOS stay single-variant: their arch story is
+          # x64-vs-arm64, not x86-64 microarch levels (out of scope here).
           - os: ubuntu-22.04
             bundles: deb,appimage,rpm
+            arch_variant: baseline
+          - os: ubuntu-22.04
+            bundles: deb,appimage,rpm
+            arch_variant: v3
           - os: windows-latest
             bundles: nsis,msi
+            arch_variant: baseline
           - os: macos-latest
             bundles: dmg
+            arch_variant: baseline
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -56,9 +71,21 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev
 
       - uses: dtolnay/rust-toolchain@stable
+      # Separate rust cache per microarch variant: the two Linux jobs share
+      # the same `build` job key, and RUSTFLAGS changes every fingerprint,
+      # so a shared cache would just be thrashed (restore baseline blobs,
+      # rebuild all, overwrite) on every tag.
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch_variant }}
 
       - uses: tauri-apps/tauri-action@v0
+        # Baseline (all OSes) keeps the long-standing upload flow unchanged.
+        # The v3 variant builds with plain `cargo tauri build` instead:
+        # tauri-action uploads under Tauri's fixed filenames, which would
+        # collide with the baseline set on the same draft release, so v3 is
+        # renamed first and attached with `gh release upload` below.
+        if: matrix.arch_variant != 'v3'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Testing client-ID from the `release` environment (see header).
@@ -68,7 +95,98 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "46Anarchy ${{ github.ref_name }}"
-          releaseBody: "See the README for install notes and signing status."
+          # Detailed notes for THIS release (v0.1.0): filenames carry the
+          # version — update names + highlights on every version bump.
+          releaseBody: |
+            First public release of the 46Anarchy native launcher — Paladium 1.7.10 Modpack V11 with Microsoft login and one-click play.
+
+            ## Download the right file
+
+            **Linux** — baseline runs on any 64-bit CPU, `-v3` is optimized for AVX2 CPUs (Intel Haswell / AMD Excavator and newer, ~2013+). Easiest path picks for you:
+            ```
+            curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash
+            ```
+            Or grab it manually: `46Anarchy_0.1.0_amd64.AppImage` (portable, just run it), `46Anarchy_0.1.0_amd64-v3.AppImage`, `46Anarchy_0.1.0_amd64.deb` (+ `-v3` twin), `46Anarchy-0.1.0-1.x86_64.rpm` (+ `-v3` twin).
+
+            **Windows** — `46Anarchy_0.1.0_x64-setup.exe` (installer) or `46Anarchy_0.1.0_x64_en-US.msi`.
+            **macOS (Apple Silicon)** — `46Anarchy_0.1.0_aarch64.dmg`: drag into `/Applications`. Unsigned build: right-click → Open on first launch. No Intel Mac build in this release.
+
+            No Java to install — the launcher provisions its own runtime automatically. You need a Microsoft account that owns Minecraft: Java Edition.
+
+            ## What's inside
+
+            - Microsoft device-code login, sessions in the OS keyring, multi-account switcher
+            - Manifest install/verify with live per-file progress, mod manager, optional Loki
+            - Live game console, crash reports naming the cause, server status, repo patch notes
+            - Experimental modernized branch (Java 21): shipped but temporarily gated, back later
+
+            ## Notes
+
+            - First boot restores your session silently; Linux may ask to unlock the keyring once.
+            - Issues and feedback: https://github.com/46Anarchy/46Launcher/issues
           releaseDraft: true
           prerelease: false
           args: --bundles ${{ matrix.bundles }}
+
+      # --- x86-64-v3 variant (Linux only) --------------------------------
+      - name: Install tauri-cli
+        if: matrix.arch_variant == 'v3'
+        run: cargo install tauri-cli --version "^2.0.0" --locked
+
+      - name: Build bundles (x86-64-v3)
+        if: matrix.arch_variant == 'v3'
+        env:
+          # Microarch opt-in for this variant ONLY: never exported globally
+          # (debug/test builds and the baseline variant see no RUSTFLAGS).
+          # The shared [profile.release] LTO/strip setup is untouched.
+          RUSTFLAGS: "-C target-cpu=x86-64-v3"
+          PRISM_MSA_CLIENT_ID: ${{ secrets.PRISM_MSA_CLIENT_ID }}
+        run: cargo tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Rename bundles with -v3 infix
+        if: matrix.arch_variant == 'v3'
+        run: |
+          # Tauri has no filename knob, so rename after the build:
+          #   46Anarchy_0.1.0_amd64.AppImage -> 46Anarchy_0.1.0_amd64-v3.AppImage
+          #   46Anarchy_0.1.0_amd64.deb      -> 46Anarchy_0.1.0_amd64-v3.deb
+          #   46Anarchy-0.1.0-1.x86_64.rpm   -> 46Anarchy-0.1.0-1.x86_64-v3.rpm
+          # Only the bundles are kept (no loose binaries in the release).
+          set -euo pipefail
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          renamed=0
+          for f in "$BUNDLE_DIR"/deb/*_amd64.deb \
+                   "$BUNDLE_DIR"/appimage/*_amd64.AppImage \
+                   "$BUNDLE_DIR"/rpm/*.x86_64.rpm; do
+            [ -e "$f" ] || { echo "missing expected bundle for pattern: $f" >&2; exit 1; }
+            case "$f" in
+              *_amd64.*) new="${f%_amd64.*}_amd64-v3.${f##*.}" ;;
+              *.x86_64.*) new="${f%.x86_64.*}.x86_64-v3.${f##*.}" ;;
+            esac
+            mv -v "$f" "$new"
+            renamed=$((renamed + 1))
+          done
+          echo "renamed $renamed bundles"
+          ls -la "$BUNDLE_DIR"/deb/*-v3.deb \
+                 "$BUNDLE_DIR"/appimage/*-v3.AppImage \
+                 "$BUNDLE_DIR"/rpm/*-v3.rpm
+
+      - name: Attach -v3 bundles to the draft release
+        if: matrix.arch_variant == 'v3'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The baseline Linux job creates the draft via tauri-action; wait
+          # for it (parallel matrix jobs, similar build times) before
+          # uploading into the same draft. Filenames differ from baseline
+          # (-v3 infix), so --clobber only matters on workflow re-runs.
+          set -euo pipefail
+          for _ in $(seq 1 40); do
+            gh release view "${{ github.ref_name }}" >/dev/null 2>&1 && break
+            sleep 30
+          done
+          gh release view "${{ github.ref_name }}" >/dev/null
+          gh release upload "${{ github.ref_name }}" \
+            src-tauri/target/release/bundle/deb/*-v3.deb \
+            src-tauri/target/release/bundle/appimage/*-v3.AppImage \
+            src-tauri/target/release/bundle/rpm/*-v3.rpm \
+            --clobber

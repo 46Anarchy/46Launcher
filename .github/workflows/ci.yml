@@ -25,3 +25,5 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      # Installer microarch-variant matrix (v3/baseline/override/picker).
+      - run: bash tests/test-install-variant.sh
