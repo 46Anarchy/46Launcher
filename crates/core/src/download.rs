@@ -103,7 +103,7 @@ pub struct DownloadSummary {
 /// Build a rustls-backed client with a launcher user-agent.
 pub fn build_client() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
-        .user_agent("46anarchy-launcher/0.1.0")
+        .user_agent(concat!("46anarchy-launcher/", env!("CARGO_PKG_VERSION")))
         .build()?)
 }
 

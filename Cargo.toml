@@ -3,7 +3,7 @@
 
 [package]
 name = "launcher"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "46Anarchy native Minecraft launcher (top-level binary; game logic lives in launcher-core)"

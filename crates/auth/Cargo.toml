@@ -3,7 +3,7 @@
 
 [package]
 name = "launcher-auth"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "Authentication flows for the 46Anarchy launcher (Microsoft device-code + Xbox + Minecraft)"

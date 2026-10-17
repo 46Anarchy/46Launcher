@@ -95,10 +95,10 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "46Anarchy ${{ github.ref_name }}"
-          # Detailed notes for THIS release (v0.1.0): filenames carry the
+          # Detailed notes for THIS release (v0.2.0): filenames carry the
           # version — update names + highlights on every version bump.
           releaseBody: |
-            Première version publique du launcher natif 46Anarchy — Modpack Paladium 1.7.10 avec connexion Microsoft et jeu en un clic.
+            La branche expérimentale modernisée passe enfin en jeu : Java 21 et rendu modernisé, en plus du modpack Paladium classique — toujours en un clic.
 
             ## Télécharger le bon fichier
 
@@ -106,24 +106,35 @@ jobs:
             ```
             curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash
             ```
-            Ou en manuel : `46Anarchy_0.1.0_amd64.AppImage` (portable, il suffit de le lancer), `46Anarchy_0.1.0_amd64-v3.AppImage`, `46Anarchy_0.1.0_amd64.deb` (+ jumeau `-v3`), `46Anarchy-0.1.0-1.x86_64.rpm` (+ jumeau `-v3`).
+            Ou en manuel : `46Anarchy_0.2.0_amd64.AppImage` (portable, il suffit de le lancer), `46Anarchy_0.2.0_amd64-v3.AppImage`, `46Anarchy_0.2.0_amd64.deb` (+ jumeau `-v3`), `46Anarchy-0.2.0-1.x86_64.rpm` (+ jumeau `-v3`).
 
-            **Windows** — `46Anarchy_0.1.0_x64-setup.exe` (installeur) ou `46Anarchy_0.1.0_x64_en-US.msi`.
-            **macOS (Apple Silicon)** — `46Anarchy_0.1.0_aarch64.dmg` : glisser dans `/Applications`. Build non signé : clic droit → Ouvrir au premier lancement. Pas de build Mac Intel dans cette version.
+            **Windows** — `46Anarchy_0.2.0_x64-setup.exe` (installeur) ou `46Anarchy_0.2.0_x64_en-US.msi`.
 
-            Pas de Java à installer — le launcher provisionne son propre runtime automatiquement. Il vous faut un compte Microsoft possédant Minecraft: Java Edition.
+            **macOS (Apple Silicon)** — `46Anarchy_0.2.0_aarch64.dmg` : glisser dans `/Applications`. Build non signé : clic droit → Ouvrir au premier lancement. Pas de build Mac Intel dans cette version.
+
+            Pas de Java à installer — le launcher provisionne son propre runtime automatiquement (Temurin 8 pour le classique, GraalVM 21 pour l'expérimental). Il vous faut un compte Microsoft possédant Minecraft: Java Edition.
+
+            ## Quoi de neuf
+
+            - **Branche expérimentale modernisée : activée.** Choisissez « Expérimental modernisé » dans le sélecteur de modpack : Java 21 + LWJGL3 (lwjgl3ify, UniMixins), rendu modernisé (Beddium) et optimisations modernes (FalseTweaks, Hodgepodge), runtime GraalVM 21 et presets JVM ZGC provisionnés automatiquement. Le pack Paladium complet s'y lance et s'y joue.
+            - **OptiFine géré automatiquement.** Incompatible avec le runtime moderne, il est mis de côté à la bascule vers l'expérimental et restauré dès le retour au classique — dans les deux sens, en un clic, sans rien réinstaller.
+            - **Correctifs du runtime moderne** : roue de compétences des familiers, pierres légendaires (téléportation), et divers.
+            - **Correctif du défilement à la molette** dans l'interface.
+            - **README public en français** : installation, dépannage, tout y est — https://github.com/46Anarchy/46Launcher#readme
 
             ## Contenu
 
             - Connexion Microsoft (device-code), sessions dans le trousseau système, multi-comptes
             - Installation/vérification par manifeste avec progression par fichier, gestionnaire de mods, Loki optionnel
             - Console du jeu en direct, rapports de plantage avec la cause, statut serveur, notes de patch des dépôts
-            - Branche expérimentale modernisée (Java 21) : incluse mais temporairement désactivée, de retour plus tard
+            - Configuration Java (mémoire, presets JVM par modpack, résolution et plein écran) enregistrée automatiquement
 
             ## Notes
 
+            - Bascule classique ⇄ expérimental librement, à tout moment, depuis le sélecteur de modpack : OptiFine et la pile moderne sont déplacés et restaurés automatiquement.
             - Le premier démarrage restaure votre session silencieusement ; Linux peut demander le déverrouillage du trousseau une fois.
-            - Problèmes et retours : https://github.com/46Anarchy/46Launcher/issues
+            - La branche expérimentale reste expérimentale : en cas de souci, revenez au classique en un clic et signalez-le.
+            - Problèmes et retours : https://github.com/46Anarchy/46Launcher/issues (joignez si possible ce qu'affiche l'onglet Console).
           releaseDraft: true
           prerelease: false
           args: --bundles ${{ matrix.bundles }}
