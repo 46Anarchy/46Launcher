@@ -29,6 +29,9 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # (used by the src-tauri harness) for `cargo tauri dev` / `cargo tauri build`.
 # NOTE: Tauri v2 has no `api-all` feature (that was v1); default features suffice.
 tauri = { version = "2", optional = true }
+# Auto-update signé (manifeste latest.json des releases) : mêmes règles que
+# `tauri` — optionnel, activé par le harness via `tauri-backend`.
+tauri-plugin-updater = { version = "2", optional = true }
 # Direct per-view WebKit settings (see `tauri_app::apply_webkit_ram_settings`).
 # Linux-only + optional (only with `tauri-backend`) so portable builds and
 # non-Linux targets link nothing extra. Pinned `=2.0.2` with `v2_38`: exactly
@@ -53,4 +56,4 @@ html-minifier = "=5.0.2"
 
 [features]
 default = []
-tauri-backend = ["dep:tauri", "dep:tauri-build", "dep:webkit2gtk"]
+tauri-backend = ["dep:tauri", "dep:tauri-build", "dep:webkit2gtk", "dep:tauri-plugin-updater"]

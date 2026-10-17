@@ -369,6 +369,53 @@ pub async fn get_build_info() -> BuildInfoDto {
     commands::get_build_info().await
 }
 
+/// Mise à jour disponible pour le launcher (`check_launcher_update`).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LauncherUpdateDto {
+    /// Version publiée (ex. `0.3.0`).
+    pub version: String,
+    /// Note de version (optionnelle).
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+/// Vérifie la mise à jour du launcher (manifeste signé `latest.json` de la
+/// dernière release GitHub). `None` = à jour, hors-ligne ou manifeste
+/// absent : jamais d'erreur, jamais de bruit.
+pub async fn check_launcher_update(app: AppHandle) -> Result<Option<LauncherUpdateDto>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let Ok(updater) = app.updater() else {
+        return Ok(None);
+    };
+    match updater.check().await {
+        Ok(Some(update)) => Ok(Some(LauncherUpdateDto {
+            version: update.version.clone(),
+            notes: update.body.clone(),
+        })),
+        Ok(None) => Ok(None),
+        Err(_) => Ok(None),
+    }
+}
+
+#[tauri::command]
+/// Télécharge et installe la mise à jour signée puis relance le launcher
+/// (Windows : l'installeur relance l'app ; Linux AppImage/macOS : `restart`
+/// ici). `Ok(())` sans effet quand rien n'est à jour.
+pub async fn install_launcher_update(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater indisponible : {e}"))?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Ok(());
+    };
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| format!("mise à jour impossible : {e}"))?;
+    app.restart()
+}
+
 /// Linux-only per-view WebKit RAM diet for the main window.
 ///
 /// Single-page launcher with zero canvas/WebGL/audio/video (verified by grep
@@ -418,6 +465,7 @@ pub fn run_app() -> Result<(), String> {
     let inner = new_shared_state();
     let restore = inner.clone();
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(TauriState { inner })
         .setup(|app| {
             // Per-view WebKit RAM diet (Linux-only; other platforms compile
@@ -534,7 +582,9 @@ pub fn run_app() -> Result<(), String> {
             get_server_status,
             get_patch_notes,
             get_launcher_version,
-            get_build_info
+            get_build_info,
+            check_launcher_update,
+            install_launcher_update
         ])
         // Path relative to `crates/ui/` (this crate's manifest dir).
         .run(tauri::generate_context!("../../src-tauri/tauri.conf.json"))

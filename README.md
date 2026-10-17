@@ -75,7 +75,11 @@ Les fichiers du jeu (`~/.46anarchy`) sont conservés ; supprimez ce dossier pour
 - **Configuration Java** : mémoire allouée (curseur), presets d'arguments JVM par modpack, résolution et plein écran — tout est enregistré automatiquement, sans bouton.
 - **Console et plantages** : sortie du jeu en direct dans l'onglet Console, cause du plantage affichée en cas de crash.
 - **Serveur et patch notes** : statut du serveur 46Anarchy en direct sur l'accueil, notes de patch tirées des dépôts du projet.
-- **Branche expérimentale** (Java 21, rendu modernisé) : visible dans le sélecteur de modpack mais désactivée pour l'instant (« bientôt disponible »).
+- **Branche expérimentale** (Java 21, rendu modernisé) : sélectionnable depuis le sélecteur de modpack (« Expérimental modernisé ») ; OptiFine est mis de côté à la bascule et restauré au retour au classique.
+
+## Mises à jour
+
+À partir de la v0.2.0, le launcher vérifie sa propre version au démarrage : si une release plus récente est publiée, une fenêtre propose de l'installer, puis le launcher redémarre (Windows, macOS, Linux AppImage). Les paquets `.deb`/`.rpm` se mettent à jour avec la même commande que l'installation — `install.sh` installe toujours la dernière release — et les versions antérieures à la v0.2.0 aussi. Les fichiers du jeu (`~/.46anarchy`) ne sont jamais touchés par une mise à jour du launcher.
 
 ## Dépannage
 

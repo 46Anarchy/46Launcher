@@ -23,9 +23,18 @@
     },
     "withGlobalTauri": true
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE2OEI0ODBEODRDOTVCOEQKUldTTlc4bUVEVWlMRmhHMDRNRkNyeUo1R3lNNitrNHlVSFpyQlY3SWV2K0xtbjYxZDRqb2xRejkK",
+      "endpoints": [
+        "https://github.com/46Anarchy/46Launcher/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage", "rpm", "nsis", "msi", "dmg"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
