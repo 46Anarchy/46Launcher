@@ -409,6 +409,15 @@ pub async fn install_launcher_update(app: AppHandle) -> Result<(), String> {
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         return Ok(());
     };
+    // Les paquets .deb/.rpm ne savent pas se remplacer : seul l'AppImage
+    // Linux est supporté par l'updater — message clair au lieu d'une erreur.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_none() {
+        return Err(
+            "mise à jour automatique indisponible pour les paquets .deb/.rpm — relancez install.sh ou téléchargez la nouvelle version depuis GitHub"
+                .to_string(),
+        );
+    }
     update
         .download_and_install(|_chunk, _total| {}, || {})
         .await
