@@ -118,7 +118,7 @@ jobs:
           # Detailed notes for THIS release (v0.3.0): filenames carry the
           # version — update names + highlights on every version bump.
           releaseBody: |
-            Le launcher se met désormais à jour tout seul — et la pile expérimentale se répare automatiquement en cas de pépin.
+            La mise à jour automatique arrive : le launcher se met à jour tout seul, et la pile expérimentale se répare désormais sans intervention.
 
             ## Télécharger le bon fichier
 
@@ -136,9 +136,10 @@ jobs:
 
             ## Quoi de neuf
 
-            - **Mise à jour automatique du launcher.** Au démarrage, le launcher vérifie s'il existe une version plus récente et propose de l'installer, puis redémarre tout seul (Windows, macOS, Linux AppImage). Les paquets `.deb`/`.rpm` restent mis à jour via la commande d'installation.
-            - **Pile expérimentale auto-réparée.** Le shim de compatibilité du modpack est contrôlé à chaque installation ou vérification : fichier manquant, illisible ou périmé → retéléchargé automatiquement, anciennes versions nettoyées. En cas de release invalide, un message clair remplace le plantage au démarrage.
-            - **Shim de compatibilité épinglé sur la v0.1.1** (jar publié par la CI) et messages de mise à jour plus clairs pour les paquets `.deb`/`.rpm`.
+            - **Mise à jour automatique du launcher.** Au démarrage, il vérifie s'il existe une version plus récente et propose de l'installer, puis redémarre tout seul — Windows, macOS et Linux (AppImage). Les paquets `.deb`/`.rpm` continuent de se mettre à jour via la commande d'installation.
+            - **Pile expérimentale auto-réparée.** Le shim de compatibilité du modpack est contrôlé à chaque installation ou vérification : fichier manquant, illisible ou périmé → retéléchargé automatiquement, anciennes versions et doublons nettoyés.
+            - **Fini les plantages silencieux.** Si la release du shim est invalide, le launcher affiche un message clair au lieu de laisser le jeu planter au démarrage.
+            - **Shim de compatibilité épinglé sur la v0.1.1** (jar publié par la CI) ; message explicite pour les paquets `.deb`/`.rpm`, qui ne peuvent pas s'auto-remplacer.
 
             ## Contenu
 
