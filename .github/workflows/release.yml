@@ -6,14 +6,18 @@
 # New environment → `release` → "Environment secrets" → Add secret), NOT as
 # plain repository secrets — so only this job (tag builds) can ever read
 # them, and you can additionally require reviewers / restrict to tags.
-# All secrets are optional until the matching feature is enabled — the build
-# works without them:
+# Most secrets stay optional until the matching feature is enabled; the
+# updater signing key is REQUIRED since v0.2.0 (`bundle.createUpdaterArtifacts`):
+#   TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]  signs the updater artifacts
+#                                     (`cargo tauri signer generate`; the
+#                                     matching public key lives in
+#                                     tauri.conf.json plugins.updater.pubkey).
+#                                     The "Check updater signing key" step
+#                                     fails fast with a clear message when it
+#                                     is missing.
 #   PRISM_MSA_CLIENT_ID               Azure client-ID baked into release
 #                                     builds for testing (replace with the
 #                                     project's own Entra ID once approved).
-#   TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]  updater artifacts (`cargo tauri
-#                                     signer generate`; enable `updater` in
-#                                     tauri.conf.json first — see README).
 #   APPLE_CERTIFICATE[_PASSWORD], APPLE_SIGNING_IDENTITY, APPLE_ID,
 #   APPLE_PASSWORD, APPLE_TEAM_ID     macOS signing + notarization.
 # Windows code signing: add your cert as environment secrets and extend the
@@ -62,6 +66,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # createUpdaterArtifacts=true signs the bundles: fail fast with a
+      # clear message instead of a cryptic tauri error when the signing
+      # secret is missing from the `release` environment.
+      - name: Check updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY manquant (environnement 'release') — impossible de signer les artefacts de mise à jour. Voir l'en-tête de ce fichier."
+            exit 1
+          fi
+
       - name: Install Linux WebKit stack
         if: runner.os == 'Linux'
         run: |
@@ -88,6 +104,10 @@ jobs:
         if: matrix.arch_variant != 'v3'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signature des artefacts de mise à jour (obligatoire — voir le
+          # contrôle plus haut et l'en-tête de ce fichier).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Testing client-ID from the `release` environment (see header).
           # Unset → placeholder build that refuses login with a clear
           # message instead of a cryptic 403.
@@ -121,6 +141,7 @@ jobs:
             - **Correctifs du runtime moderne** : roue de compétences des familiers, pierres légendaires (téléportation), et divers.
             - **Correctif du défilement à la molette** dans l'interface.
             - **README public en français** : installation, dépannage, tout y est — https://github.com/46Anarchy/46Launcher#readme
+            - **Mise à jour automatique du launcher** : au démarrage, le launcher vérifie s'il existe une version plus récente et propose de l'installer, puis redémarre tout seul (Windows, macOS, Linux AppImage). Les paquets `.deb`/`.rpm` restent mis à jour via la commande d'installation.
 
             ## Contenu
 
@@ -133,6 +154,7 @@ jobs:
 
             - Bascule classique ⇄ expérimental librement, à tout moment, depuis le sélecteur de modpack : OptiFine et la pile moderne sont déplacés et restaurés automatiquement.
             - Le premier démarrage restaure votre session silencieusement ; Linux peut demander le déverrouillage du trousseau une fois.
+            - La mise à jour automatique prend effet à partir de cette version ; les versions antérieures se mettent à jour en retéléchargeant le launcher (install.sh ou page Releases).
             - La branche expérimentale reste expérimentale : en cas de souci, revenez au classique en un clic et signalez-le.
             - Problèmes et retours : https://github.com/46Anarchy/46Launcher/issues (joignez si possible ce qu'affiche l'onglet Console).
           releaseDraft: true
@@ -151,6 +173,8 @@ jobs:
           # (debug/test builds and the baseline variant see no RUSTFLAGS).
           # The shared [profile.release] LTO/strip setup is untouched.
           RUSTFLAGS: "-C target-cpu=x86-64-v3"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           PRISM_MSA_CLIENT_ID: ${{ secrets.PRISM_MSA_CLIENT_ID }}
         run: cargo tauri build --bundles ${{ matrix.bundles }}
 
