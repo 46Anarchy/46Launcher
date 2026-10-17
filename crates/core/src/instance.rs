@@ -203,21 +203,104 @@ pub fn write_installed_flavor(game_dir: &Path, experimental: bool) {
 /// bytes. Classic (`experimental == false`) MOVES the launcher-managed
 /// modern stack ([`crate::modern::MODERN_STACK_FILES`], `.disabled` twins
 /// included) from `mods/` to the launcher-managed stash
-/// (`<gameDir>/modstack-experimental/`, FML-invisible, never re-downloaded);
-/// experimental moves them BACK (only still-missing files are downloaded
-/// afterwards). Both directions are idempotent and never overwrite: when a
+/// (`<gameDir>/modstack-experimental/`, FML-invisible, never re-downloaded)
+/// and restores stashed `optifine*` jars back to `mods/`;
+/// experimental moves the modern stack BACK (only still-missing files are
+/// downloaded afterwards) and stashes `optifine*` (`optifine*` prefix,
+/// case-insensitive, `.disabled` twins included — OptiFine is replaced by
+/// the Beddium stack on the modern branch and crashes its LWJGL3/Java 21
+/// runtime). Both directions are idempotent and never overwrite: when a
 /// `mods/` copy and a stash copy somehow coexist, the `mods/` copy wins for
 /// the boot and the stash copy stays put. Manifest/CDN files are never
-/// touched — only the launcher-managed stack moves (OptiFine stays wherever
-/// the CDN plan puts it on both flavors).
+/// touched — only the launcher-managed stack plus `optifine*` move.
 ///
 /// Returns the moved file names (sorted) for the Console log.
 pub fn prune_other_flavor(game_dir: &Path, experimental: bool) -> Vec<String> {
     if experimental {
-        crate::modern::restore_modern_stack(game_dir)
+        let mut moved = crate::modern::restore_modern_stack(game_dir);
+        moved.extend(stash_optifine(game_dir));
+        moved.sort();
+        moved
     } else {
-        crate::modern::stash_modern_stack(game_dir)
+        let mut moved = crate::modern::stash_modern_stack(game_dir);
+        moved.extend(restore_optifine(game_dir));
+        moved.sort();
+        moved
     }
+}
+
+/// `optifine*` match (case-insensitive) on the file name, `.disabled` twin
+/// stripped before matching so toggled-off copies swap too.
+fn is_optifine_file_name(name: &str) -> bool {
+    let base = name.strip_suffix(".disabled").unwrap_or(name);
+    base.to_lowercase().starts_with("optifine")
+}
+
+/// Experimental-activate: MOVE every `optifine*` file from `mods/` to the
+/// launcher-managed stash (reuses [`crate::modern::move_without_overwrite`]).
+fn stash_optifine(game_dir: &Path) -> Vec<String> {
+    let mods = mods_dir(game_dir);
+    let stash = crate::modern::modern_stash_dir(game_dir);
+    let mut bases: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&mods) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if is_optifine_file_name(name) {
+                let base = name.strip_suffix(".disabled").unwrap_or(name).to_string();
+                if !bases.iter().any(|b| b == &base) {
+                    bases.push(base);
+                }
+            }
+        }
+    }
+    let mut moved = Vec::new();
+    for base in &bases {
+        for variant in [base.clone(), format!("{base}.disabled")] {
+            if crate::modern::move_without_overwrite(&mods.join(&variant), &stash.join(&variant)) {
+                moved.push(variant);
+            }
+        }
+    }
+    moved
+}
+
+/// Classic-activate: move stashed `optifine*` files BACK to `mods/`.
+fn restore_optifine(game_dir: &Path) -> Vec<String> {
+    let mods = mods_dir(game_dir);
+    let stash = crate::modern::modern_stash_dir(game_dir);
+    let mut bases: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&stash) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if is_optifine_file_name(name) {
+                let base = name.strip_suffix(".disabled").unwrap_or(name).to_string();
+                if !bases.iter().any(|b| b == &base) {
+                    bases.push(base);
+                }
+            }
+        }
+    }
+    let mut restored = Vec::new();
+    for base in &bases {
+        for variant in [base.clone(), format!("{base}.disabled")] {
+            if crate::modern::move_without_overwrite(&stash.join(&variant), &mods.join(&variant)) {
+                restored.push(variant);
+            }
+        }
+    }
+    restored
 }
 
 /// Remove the installed game payload: mods, the experimental mod stash
@@ -437,7 +520,9 @@ mod tests {
             std::fs::write(mods.join(n), b"pack").unwrap();
         }
         // Classic-activate stashes the whole stack (bytes preserved, dir
-        // created on demand), keeps the pack and CDN files.
+        // created on demand), keeps the pack and CDN files. OptiFine stays
+        // on classic (restored when present in the stash, untouched
+        // otherwise).
         let moved = prune_other_flavor(game, false);
         assert_eq!(moved.len(), MODERN_STACK_FILES.len(), "{moved:?}");
         for n in MODERN_STACK_FILES {
@@ -463,14 +548,33 @@ mod tests {
         );
         // Idempotent second run (same result, nothing moved).
         assert!(prune_other_flavor(game, false).is_empty());
-        // Experimental-activate restores everything, no download needed.
+        // Experimental-activate restores everything, no download needed,
+        // and stashes `optifine*` (Beddium stack replaces OptiFine).
         let back = prune_other_flavor(game, true);
-        assert_eq!(back.len(), MODERN_STACK_FILES.len(), "{back:?}");
+        assert_eq!(back.len(), MODERN_STACK_FILES.len() + 1, "{back:?}");
+        assert!(back.contains(&"optifine-prod.jar".to_string()), "{back:?}");
         for n in MODERN_STACK_FILES {
             assert_eq!(std::fs::read(mods.join(n)).unwrap(), b"x");
             assert!(!stash.join(n).exists());
         }
+        assert!(!mods.join("optifine-prod.jar").exists());
+        assert_eq!(
+            std::fs::read(stash.join("optifine-prod.jar")).unwrap(),
+            b"pack"
+        );
         assert!(prune_other_flavor(game, true).is_empty());
+        // Back to classic restores OptiFine and re-stashes the modern stack.
+        let classic_again = prune_other_flavor(game, false);
+        assert_eq!(
+            classic_again.len(),
+            MODERN_STACK_FILES.len() + 1,
+            "{classic_again:?}"
+        );
+        assert_eq!(
+            std::fs::read(mods.join("optifine-prod.jar")).unwrap(),
+            b"pack"
+        );
+        assert!(!stash.join("optifine-prod.jar").exists());
         // Flavor marker roundtrip (None when absent).
         assert_eq!(installed_flavor(game), None);
         write_installed_flavor(game, true);

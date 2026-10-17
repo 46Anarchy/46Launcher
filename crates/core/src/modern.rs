@@ -532,7 +532,7 @@ fn is_legacy_unimixins(name: &str) -> bool {
 /// the `mods/` copy wins for the boot, the stash copy waits; documented,
 /// never merged or deleted). Falls back to copy+remove when `rename`
 /// crosses devices.
-fn move_without_overwrite(src: &Path, dst: &Path) -> bool {
+pub(crate) fn move_without_overwrite(src: &Path, dst: &Path) -> bool {
     if !src.is_file() || dst.exists() {
         return false;
     }

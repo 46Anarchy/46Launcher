@@ -96,7 +96,7 @@ pub fn verbose_logging_enabled() -> bool {
 /// test stays in the tree. Flip to `false` to re-enable the branch — no
 /// other edit needed (the frontend mirrors this constant, see
 /// `EXPERIMENTAL_GATED` in `frontend/dist/main.js`).
-pub const EXPERIMENTAL_GATED: bool = true;
+pub const EXPERIMENTAL_GATED: bool = false;
 /// French refusal for `set_pack_flavor(experimental = true)` while gated.
 pub const EXPERIMENTAL_GATED_MSG: &str = "La branche expérimentale est temporairement désactivée — le modpack Paladium reste disponible.";
 /// French one-shot boot notice when the stored settings said experimental

@@ -596,6 +596,9 @@ pub fn cdn_plan_for_mode(
     if !experimental {
         return planned;
     }
+    // Experimental replaces OptiFine with the Beddium stack (Beddium +
+    // Computium): `optifine*` jars (case-insensitive) stay on the classic
+    // branch only — they crash under the LWJGL3/Java 21 runtime.
     planned
         .into_iter()
         .filter(|p| {
@@ -603,6 +606,7 @@ pub fn cdn_plan_for_mode(
                 || launcher_core::modern_cdn_lib_wanted(&p.file.name))
                 && !p.file.name.starts_with("palaforge")
                 && !p.file.name.starts_with("forge-")
+                && !p.file.name.to_lowercase().starts_with("optifine")
         })
         .collect()
 }
@@ -6823,16 +6827,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_pack_flavor_gated_rejects_experimental_keeps_default() {
+    async fn set_pack_flavor_respects_experimental_gate_flag() {
         let (state, _dir) = state_with_tmp();
-        // Verrou actif (constante) : l'expérimental est refusé en français,
-        // sans emoji, sans toucher aux drapeaux ni au disque.
-        let err = set_pack_flavor(&state, true).await.expect_err("gated");
-        assert!(err.contains("temporairement"), "unexpected: {err}");
-        assert_french_no_emoji(&err);
-        assert!(!get_settings(&state).await.experimental_runtime);
-        assert!(!get_settings(&state).await.experimental_optimizations);
-        // La branche par défaut reste commutable sous verrou.
+        // Verdict selon la constante de production : verrou actif =
+        // l'expérimental est refusé en français, sans emoji, sans toucher
+        // aux drapeaux ni au disque ; verrou levé = bascule effectuée.
+        if crate::state::EXPERIMENTAL_GATED {
+            let err = set_pack_flavor(&state, true).await.expect_err("gated");
+            assert!(err.contains("temporairement"), "unexpected: {err}");
+            assert_french_no_emoji(&err);
+            assert!(!get_settings(&state).await.experimental_runtime);
+            assert!(!get_settings(&state).await.experimental_optimizations);
+        } else {
+            let swap = set_pack_flavor(&state, true).await.unwrap();
+            assert!(swap.experimental);
+            assert!(get_settings(&state).await.experimental_runtime);
+        }
+        // La branche par défaut reste commutable dans les deux modes.
         let swap = set_pack_flavor(&state, false).await.unwrap();
         assert!(!swap.experimental);
         assert!(swap.moved.is_empty());
@@ -7096,11 +7107,12 @@ mod tests {
 
     #[test]
     fn content_check_is_mode_aware_and_ignores_stash() {
-        // Plan mode-actif : classique exige le mod `forge-*`, expérimental
-        // l'exclut (même filtre que `cdn_plan_for_mode` — jamais d'exigence
-        // inter-saveur) ; les bibliothèques restent du ressort de la garde
-        // libs, pas d'ici. La réserve `modstack-experimental/` ne satisfait
-        // RIEN dans les deux sens.
+        // Plan mode-actif : classique exige les mods `forge-*` et
+        // `optifine*`, expérimental les exclut (même filtre que
+        // `cdn_plan_for_mode` — jamais d'exigence inter-saveur, OptiFine
+        // étant remplacé par la pile Beddium) ; les bibliothèques restent
+        // du ressort de la garde libs, pas d'ici. La réserve
+        // `modstack-experimental/` ne satisfait RIEN dans les deux sens.
         let m: Manifest = parse_manifest(
             r#"{
             "name": "t", "root": "t", "version": "v", "assetIndex": "",
@@ -7120,6 +7132,9 @@ mod tests {
                 {"name": "forge-side-mod.jar", "model": "mods",
                  "url": "https://x/forge-side-mod.jar", "size": 5, "sha1": "bb",
                  "path": "forge-side-mod.jar", "os": []},
+                {"name": "OptiFine_1.7.10_HD_U_E7.jar", "model": "mods",
+                 "url": "https://x/OptiFine_1.7.10_HD_U_E7.jar", "size": 6, "sha1": "dd",
+                 "path": "OptiFine_1.7.10_HD_U_E7.jar", "os": []},
                 {"name": "somelib-1.0.jar", "model": "libraries-windows",
                  "url": "https://x/somelib.jar", "size": 3, "sha1": "cc",
                  "path": "org/example/somelib-1.0.jar", "os": ["WINDOWS"]}
@@ -7131,8 +7146,9 @@ mod tests {
         let game = dir.path();
         let mods = launcher_core::mods_dir(game);
         std::fs::create_dir_all(&mods).unwrap();
-        // Seul le mod du pack présent : classique exige aussi le `forge-*`,
-        // expérimental l'a hors plan (et la lib reste hors champ ici).
+        // Seul le mod du pack présent : classique exige aussi le `forge-*`
+        // (et OptiFine), expérimental les a hors plan (et la lib reste hors
+        // champ ici).
         std::fs::write(mods.join("pack-mod.jar"), b"pack").unwrap();
         assert!(
             cdn_content_stale(&m, game, false),
@@ -7142,14 +7158,23 @@ mod tests {
             !cdn_content_stale(&m, game, true),
             "expérimental : forge-side-mod hors plan → frais"
         );
-        // Les deux mods présents : frais des deux côtés (la lib manquante
-        // reste du ressort de la garde bibliothèques).
+        // `forge-*` présent mais OptiFine absent : classique encore stale,
+        // expérimental frais (OptiFine hors plan, remplacé par Beddium).
         std::fs::write(mods.join("forge-side-mod.jar"), b"forge").unwrap();
+        assert!(
+            cdn_content_stale(&m, game, false),
+            "classique : OptiFine manquant → stale"
+        );
+        assert!(!cdn_content_stale(&m, game, true));
+        // Les trois mods présents : frais des deux côtés (la lib manquante
+        // reste du ressort de la garde bibliothèques).
+        std::fs::write(mods.join("OptiFine_1.7.10_HD_U_E7.jar"), b"of").unwrap();
         assert!(!cdn_content_stale(&m, game, false));
         assert!(!cdn_content_stale(&m, game, true));
         // Réserve expérimentale : ne satisfait RIEN, dans les deux sens.
         std::fs::remove_file(mods.join("pack-mod.jar")).unwrap();
         std::fs::remove_file(mods.join("forge-side-mod.jar")).unwrap();
+        std::fs::remove_file(mods.join("OptiFine_1.7.10_HD_U_E7.jar")).unwrap();
         let stash = launcher_core::modern_stash_dir(game);
         std::fs::create_dir_all(&stash).unwrap();
         std::fs::write(stash.join("pack-mod.jar"), b"pack").unwrap();
