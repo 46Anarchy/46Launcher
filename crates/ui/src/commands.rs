@@ -1995,7 +1995,6 @@ async fn exec_modern_phase(
     // (un asset GitHub périmé a déjà été servi et faisait planter le jeu au
     // boot). Local invalide → retéléchargé ; téléchargement invalide → erreur
     // claire au lieu d'une pile cassée conservée sur disque.
-    prune_stale_compat_jars(game_dir);
     for (url, dest) in &plan.coremods {
         let file = format!(
             "mods/{}",
@@ -2021,6 +2020,11 @@ async fn exec_modern_phase(
             return Err("Installation annulée.".to_string());
         }
     }
+
+    // Purge des anciennes versions du shim — APRÈS le téléchargement : si le
+    // réseau a échoué au-dessus, l'ancien jar (valide) reste en place et le
+    // jeu continue de démarrer.
+    prune_stale_compat_jars(game_dir);
 
     // Optimization stack (separate opt-in — GTNHLib, Hodgepodge,
     // ArchaicFix, FalseTweaks + FalsePatternLib).

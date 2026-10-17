@@ -92,8 +92,8 @@ pub const MODERN_UNIMIXINS_FILE: &str = "Aunimixins-all-1.7.10-0.3.2.jar";
 /// the pack mods it guards (file-driven, forces nothing) and inert unless
 /// its own config enables entries.
 pub const MODERN_COMPAT_URL: &str =
-    "https://github.com/TaxMachine/46anarchycompat/releases/download/v0.1.0/anarchycompat-0.1.0.jar";
-pub const MODERN_COMPAT_FILE: &str = "anarchycompat-0.1.0.jar";
+    "https://github.com/TaxMachine/46anarchycompat/releases/download/v0.1.1/anarchycompat-0.1.1.jar";
+pub const MODERN_COMPAT_FILE: &str = "anarchycompat-0.1.1.jar";
 /// Java feature release for the experimental runtime.
 pub const MODERN_JAVA_MAJOR: u32 = 21;
 /// Runtime dir (separate from `java/` — never clobbers the Java 8 game).
@@ -1165,7 +1165,7 @@ mod tests {
         assert!(mods[0].1.ends_with("mods/lwjgl3ify.jar"));
         // UniMixins sorts first so its MixinTweaker wins discovery.
         assert!(mods[1].1.ends_with("mods/Aunimixins-all-1.7.10-0.3.2.jar"));
-        assert!(mods[2].1.ends_with("mods/anarchycompat-0.1.0.jar"));
+        assert!(mods[2].1.ends_with("mods/anarchycompat-0.1.1.jar"));
         assert!(mods.iter().all(|(u, _)| u.starts_with("https://")));
     }
 
