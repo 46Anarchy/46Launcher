@@ -32,6 +32,13 @@ on:
 permissions:
   contents: write
 
+# One release run per tag at a time: two concurrent runs would race on the
+# same draft release (delete/upload interleaving → « Not Found » from the
+# release-asset API, seen when the v0.3.0 tag was moved mid-run).
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   build:
     # Gate every secret below behind the `release` environment: tag builds
@@ -59,8 +66,12 @@ jobs:
           - os: windows-latest
             bundles: nsis,msi
             arch_variant: baseline
+          # macOS needs the `app` target as well: it is the one that yields
+          # the signed updater artifact (`46Anarchy.app.tar.gz` + `.sig`).
+          # With `dmg` alone there is no darwin payload in latest.json and
+          # macOS clients never see an update.
           - os: macos-latest
-            bundles: dmg
+            bundles: dmg,app
             arch_variant: baseline
     runs-on: ${{ matrix.os }}
     steps:
