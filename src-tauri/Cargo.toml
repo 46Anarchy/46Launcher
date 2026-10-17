@@ -5,7 +5,7 @@
 
 [package]
 name = "launcher"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 description = "46Anarchy launcher (Tauri v2 harness; backend lives in launcher-ui)"

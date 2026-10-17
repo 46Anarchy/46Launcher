@@ -7,7 +7,7 @@
 # plain repository secrets — so only this job (tag builds) can ever read
 # them, and you can additionally require reviewers / restrict to tags.
 # Most secrets stay optional until the matching feature is enabled; the
-# updater signing key is REQUIRED since v0.2.0 (`bundle.createUpdaterArtifacts`):
+# updater signing key is REQUIRED since v0.3.0 (`bundle.createUpdaterArtifacts`):
 #   TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]  signs the updater artifacts
 #                                     (`cargo tauri signer generate`; the
 #                                     matching public key lives in
@@ -115,10 +115,10 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "46Anarchy ${{ github.ref_name }}"
-          # Detailed notes for THIS release (v0.2.0): filenames carry the
+          # Detailed notes for THIS release (v0.3.0): filenames carry the
           # version — update names + highlights on every version bump.
           releaseBody: |
-            La branche expérimentale modernisée passe enfin en jeu : Java 21 et rendu modernisé, en plus du modpack Paladium classique — toujours en un clic.
+            Le launcher se met désormais à jour tout seul — et la pile expérimentale se répare automatiquement en cas de pépin.
 
             ## Télécharger le bon fichier
 
@@ -126,22 +126,19 @@ jobs:
             ```
             curl -fsSL https://raw.githubusercontent.com/46Anarchy/46Launcher/master/install.sh | bash
             ```
-            Ou en manuel : `46Anarchy_0.2.0_amd64.AppImage` (portable, il suffit de le lancer), `46Anarchy_0.2.0_amd64-v3.AppImage`, `46Anarchy_0.2.0_amd64.deb` (+ jumeau `-v3`), `46Anarchy-0.2.0-1.x86_64.rpm` (+ jumeau `-v3`).
+            Ou en manuel : `46Anarchy_0.3.0_amd64.AppImage` (portable, il suffit de le lancer), `46Anarchy_0.3.0_amd64-v3.AppImage`, `46Anarchy_0.3.0_amd64.deb` (+ jumeau `-v3`), `46Anarchy-0.3.0-1.x86_64.rpm` (+ jumeau `-v3`).
 
-            **Windows** — `46Anarchy_0.2.0_x64-setup.exe` (installeur) ou `46Anarchy_0.2.0_x64_en-US.msi`.
+            **Windows** — `46Anarchy_0.3.0_x64-setup.exe` (installeur) ou `46Anarchy_0.3.0_x64_en-US.msi`.
 
-            **macOS (Apple Silicon)** — `46Anarchy_0.2.0_aarch64.dmg` : glisser dans `/Applications`. Build non signé : clic droit → Ouvrir au premier lancement. Pas de build Mac Intel dans cette version.
+            **macOS (Apple Silicon)** — `46Anarchy_0.3.0_aarch64.dmg` : glisser dans `/Applications`. Build non signé : clic droit → Ouvrir au premier lancement. Pas de build Mac Intel dans cette version.
 
             Pas de Java à installer — le launcher provisionne son propre runtime automatiquement (Temurin 8 pour le classique, GraalVM 21 pour l'expérimental). Il vous faut un compte Microsoft possédant Minecraft: Java Edition.
 
             ## Quoi de neuf
 
-            - **Branche expérimentale modernisée : activée.** Choisissez « Expérimental modernisé » dans le sélecteur de modpack : Java 21 + LWJGL3 (lwjgl3ify, UniMixins), rendu modernisé (Beddium) et optimisations modernes (FalseTweaks, Hodgepodge), runtime GraalVM 21 et presets JVM ZGC provisionnés automatiquement. Le pack Paladium complet s'y lance et s'y joue.
-            - **OptiFine géré automatiquement.** Incompatible avec le runtime moderne, il est mis de côté à la bascule vers l'expérimental et restauré dès le retour au classique — dans les deux sens, en un clic, sans rien réinstaller.
-            - **Correctifs du runtime moderne** : roue de compétences des familiers, pierres légendaires (téléportation), et divers.
-            - **Correctif du défilement à la molette** dans l'interface.
-            - **README public en français** : installation, dépannage, tout y est — https://github.com/46Anarchy/46Launcher#readme
-            - **Mise à jour automatique du launcher** : au démarrage, le launcher vérifie s'il existe une version plus récente et propose de l'installer, puis redémarre tout seul (Windows, macOS, Linux AppImage). Les paquets `.deb`/`.rpm` restent mis à jour via la commande d'installation.
+            - **Mise à jour automatique du launcher.** Au démarrage, le launcher vérifie s'il existe une version plus récente et propose de l'installer, puis redémarre tout seul (Windows, macOS, Linux AppImage). Les paquets `.deb`/`.rpm` restent mis à jour via la commande d'installation.
+            - **Pile expérimentale auto-réparée.** Le shim de compatibilité du modpack est contrôlé à chaque installation ou vérification : fichier manquant, illisible ou périmé → retéléchargé automatiquement, anciennes versions nettoyées. En cas de release invalide, un message clair remplace le plantage au démarrage.
+            - **Shim de compatibilité épinglé sur la v0.1.1** (jar publié par la CI) et messages de mise à jour plus clairs pour les paquets `.deb`/`.rpm`.
 
             ## Contenu
 
