@@ -1893,6 +1893,45 @@ async fn plan_modern_phase(
     })
 }
 
+/// Anciennes copies du shim : FML chargerait chaque `anarchycompat-*.jar`
+/// trouvé dans `mods/` — on ne garde que la version épinglée.
+fn prune_stale_compat_jars(game_dir: &std::path::Path) {
+    let mods = launcher_core::mods_dir(game_dir);
+    let Ok(entries) = std::fs::read_dir(&mods) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let base = name.strip_suffix(".disabled").unwrap_or(name);
+        if base.starts_with("anarchycompat-")
+            && base != launcher_core::MODERN_COMPAT_FILE
+            && std::fs::remove_file(entry.path()).is_ok()
+        {
+            eprintln!("[launcher] shim obsolète supprimé : mods/{name}");
+        }
+    }
+}
+
+/// `true` quand le jar contient le descripteur du plugin RFB d'AnarchyCompat —
+/// le marqueur qui distingue la vraie build de l'asset GitHub périmé
+/// (constaté le 17/10 : jar sans RFB → `IllegalAccessError MixinTransformer`
+/// au boot). Vérifie aussi que le zip est lisible.
+fn compat_jar_is_valid(path: &std::path::Path) -> bool {
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let Ok(mut zip) = zip::ZipArchive::new(file) else {
+        return false;
+    };
+    let present = zip
+        .by_name("META-INF/rfb-plugin/anarchycompat.properties")
+        .is_ok();
+    present
+}
+
 /// Provision the experimental runtime: upstream LWJGL3 library set, GraalVM
 /// 21 (`java21/`, never clobbers `java/`), both coremods in `mods/`, the
 /// optimization stack when `optimizations` is on, and seeded default
@@ -1952,13 +1991,31 @@ async fn exec_modern_phase(
     }
 
     // Coremods (size-checked — GitHub releases publish no hashes).
+    // Compat : la présence ne suffit pas — le jar doit contenir le plugin RFB
+    // (un asset GitHub périmé a déjà été servi et faisait planter le jeu au
+    // boot). Local invalide → retéléchargé ; téléchargement invalide → erreur
+    // claire au lieu d'une pile cassée conservée sur disque.
+    prune_stale_compat_jars(game_dir);
     for (url, dest) in &plan.coremods {
         let file = format!(
             "mods/{}",
             dest.file_name().unwrap_or_default().to_string_lossy()
         );
+        let is_compat =
+            dest.file_name().and_then(|n| n.to_str()) == Some(launcher_core::MODERN_COMPAT_FILE);
+        if is_compat && dest.exists() && !compat_jar_is_valid(dest) {
+            eprintln!("[launcher] {file} invalide (plugin RFB absent) — retéléchargement.");
+            let _ = std::fs::remove_file(dest);
+        }
         if download_size_checked(client, url, dest, &file, run, cancel.clone()).await? {
             report.coremods_downloaded += 1;
+        }
+        if is_compat && !compat_jar_is_valid(dest) {
+            let _ = std::fs::remove_file(dest);
+            return Err(format!(
+                "{} téléchargé invalide (plugin RFB absent) — l'asset GitHub de la release est périmé. Réessayez plus tard ou signalez-le sur Discord ; aucun fichier corrompu n'a été conservé.",
+                launcher_core::MODERN_COMPAT_FILE
+            ));
         }
         if cancelled() {
             return Err("Installation annulée.".to_string());
@@ -2030,10 +2087,20 @@ fn modern_verify_items(
         items.push((planned.dest, planned.file.size, planned.file.sha1));
     }
     // Presence-only entries: reuse the file's own size so `needs_update`
-    // reports stale if and only if the file is missing.
+    // reports stale if and only if the file is missing — except a compat jar
+    // that is present but invalid (stale GitHub asset already on disk), which
+    // gets `size + 1` to count as stale and be repaired on the next
+    // install/verify.
     for (_, dest) in launcher_core::plan_modern_coremods(game_dir) {
+        let is_compat =
+            dest.file_name().and_then(|n| n.to_str()) == Some(launcher_core::MODERN_COMPAT_FILE);
         if let Ok(meta) = std::fs::metadata(&dest) {
-            items.push((dest, meta.len(), String::new()));
+            let size = if is_compat && !compat_jar_is_valid(&dest) {
+                meta.len().saturating_add(1)
+            } else {
+                meta.len()
+            };
+            items.push((dest, size, String::new()));
         } else {
             items.push((dest, 1, String::new()));
         }
@@ -6713,12 +6780,21 @@ mod tests {
         // Coremods already present (size-checked skip → no GitHub fetch).
         let mods = launcher_core::mods_dir(&game_dir);
         std::fs::create_dir_all(&mods).unwrap();
-        for name in [
-            "lwjgl3ify.jar",
-            launcher_core::MODERN_UNIMIXINS_FILE,
-            launcher_core::MODERN_COMPAT_FILE,
-        ] {
-            std::fs::write(mods.join(name), b"x").unwrap();
+        std::fs::write(mods.join("lwjgl3ify.jar"), b"x").unwrap();
+        std::fs::write(mods.join(launcher_core::MODERN_UNIMIXINS_FILE), b"x").unwrap();
+        // Compat : la présence ne suffit plus depuis l'incident de l'asset
+        // périmé (17/10) — le validateur exige un zip portant le marqueur RFB.
+        {
+            let f = std::fs::File::create(mods.join(launcher_core::MODERN_COMPAT_FILE)).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            z.start_file(
+                "META-INF/rfb-plugin/anarchycompat.properties",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            use std::io::Write as _;
+            z.write_all(b"pluginClass=x").unwrap();
+            z.finish().unwrap();
         }
         let (emit, seen) = recording_emit();
         let run = std::sync::Arc::new(InstallRun::new(emit));
@@ -6739,19 +6815,49 @@ mod tests {
         assert!(game_dir
             .join("libraries/org/example/red/1.0/red-1.0.jar")
             .is_file());
-        // Coremod dummies untouched (no re-download).
-        for name in [
-            "lwjgl3ify.jar",
-            launcher_core::MODERN_UNIMIXINS_FILE,
-            launcher_core::MODERN_COMPAT_FILE,
-        ] {
+        // Coremod dummies untouched (no re-download) : les deux simples
+        // gardent leurs octets, le compat reste le jar RFB valide écrit ici.
+        for name in ["lwjgl3ify.jar", launcher_core::MODERN_UNIMIXINS_FILE] {
             assert_eq!(std::fs::read(mods.join(name)).unwrap(), b"x");
         }
+        assert!(compat_jar_is_valid(
+            &mods.join(launcher_core::MODERN_COMPAT_FILE)
+        ));
         let seen = seen.lock().unwrap();
         assert!(!seen.is_empty());
         assert!(seen.iter().all(|p| (0.0..=1.0).contains(&p.fraction)));
         assert!(seen.iter().any(|p| p.fraction == 1.0));
         srv.abort();
+    }
+
+    #[test]
+    fn compat_jar_validation_requires_rfb_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let good = dir.path().join("good.jar");
+        {
+            let f = std::fs::File::create(&good).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            z.start_file(
+                "META-INF/rfb-plugin/anarchycompat.properties",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            use std::io::Write as _;
+            z.write_all(b"pluginClass=x").unwrap();
+            z.finish().unwrap();
+        }
+        assert!(compat_jar_is_valid(&good));
+        let empty_zip = dir.path().join("empty.jar");
+        {
+            let f = std::fs::File::create(&empty_zip).unwrap();
+            let z = zip::ZipWriter::new(f);
+            z.finish().unwrap();
+        }
+        assert!(!compat_jar_is_valid(&empty_zip));
+        let garbage = dir.path().join("garbage.jar");
+        std::fs::write(&garbage, b"not a zip").unwrap();
+        assert!(!compat_jar_is_valid(&garbage));
+        assert!(!compat_jar_is_valid(&dir.path().join("missing.jar")));
     }
 
     fn assert_french_no_emoji(line: &str) {
