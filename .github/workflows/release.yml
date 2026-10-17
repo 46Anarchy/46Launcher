@@ -68,8 +68,11 @@ jobs:
 
       # createUpdaterArtifacts=true signs the bundles: fail fast with a
       # clear message instead of a cryptic tauri error when the signing
-      # secret is missing from the `release` environment.
+      # secret is missing from the `release` environment. `shell: bash`
+      # everywhere: the step also runs on the Windows runner, whose default
+      # PowerShell shell chokes on `[ -z ... ]`.
       - name: Check updater signing key
+        shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
