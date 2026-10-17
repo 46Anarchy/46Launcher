@@ -1357,7 +1357,7 @@ fn apply_modern_launch_for(
         std::env::consts::ARCH,
     );
     // Pinned CDN libraries the profile omits (slf4j, MongoDB, molang,
-    // mclib, guava-17.0) — downloaded by the install plan with SHAs.
+    // mclib, glm, guava-17.0) — downloaded by the install plan with SHAs.
     cp.extend(launcher_core::modern_cdn_classpath_entries(
         manifest,
         game_dir,

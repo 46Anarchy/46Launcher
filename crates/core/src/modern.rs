@@ -14,7 +14,7 @@
 //! `experimental_runtime` setting — the default game is untouched):
 //! - library set comes **only** from the upstream profile plus a pinned
 //!   allowlist of CDN libraries the profile omits but pack mods require
-//!   (slf4j, MongoDB, molang, mclib, guava-17.0 — see
+//!   (slf4j, MongoDB, molang, mclib, glm, guava-17.0 — see
 //!   [`MODERN_CDN_LIBS`]); the rest of CDN `libraries-windows` and our
 //!   Mojang regular-lib fill are skipped — mixing e.g. CDN gson-2.8.6 with
 //!   upstream gson-2.10.1 would shadow the classpath;
@@ -657,6 +657,9 @@ pub const MODERN_CDN_LIBS: &[&str] = &[
     "mongodb-driver-sync-4.5.0.jar",
     "molang-18.jar",
     "mclib-18.jar",
+    // PalaPet skill wheel + FS-Patches (`glm.vec._3.Vec3`) — no other
+    // provider: absent from the upstream profile, not bundled by any mod.
+    "glm-1.0.1.jar",
     // Newest-wins single Guava: 15.0 (vanilla recipe) breaks FML's
     // AccessTransformers; 20.0 (CDN) is untested on this path.
     "guava-17.0.jar",
@@ -1239,6 +1242,7 @@ mod tests {
             "mongodb-driver-sync-4.5.0.jar",
             "molang-18.jar",
             "mclib-18.jar",
+            "glm-1.0.1.jar",
             "guava-17.0.jar",
         ] {
             assert!(
@@ -1250,6 +1254,11 @@ mod tests {
         assert!(!modern_cdn_lib_wanted("guava-20.0.jar"));
         assert!(!modern_cdn_lib_wanted("guava-15.0.jar"));
         assert!(!modern_cdn_lib_wanted("gson-2.8.6.jar"));
+        // Classic-path shadows must never reach the experimental runtime:
+        // 0.7.11 would shadow UniMixins' Mixin 0.8.7, 3.12.1 the javassist
+        // bundled by Atlas.
+        assert!(!modern_cdn_lib_wanted("mixin-0.7.11-SNAPSHOT.jar"));
+        assert!(!modern_cdn_lib_wanted("javassist-3.12.1.GA.jar"));
     }
 
     fn mock_lib(path: &str) -> MojangLibrary {

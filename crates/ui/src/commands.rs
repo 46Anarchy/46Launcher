@@ -585,7 +585,7 @@ fn summary_dto(s: &DownloadSummary) -> InstallSummaryDto {
 /// with the official 1614 universal the profile was tested against — so
 /// both are excluded and only mods/configs/assets flow from the CDN, plus
 /// a pinned allowlist of CDN libraries the upstream profile omits but pack
-/// mods require at runtime (slf4j, MongoDB, molang, mclib, guava-17.0 —
+/// mods require at runtime (slf4j, MongoDB, molang, mclib, glm, guava-17.0 —
 /// the CDN manifest ships them with SHAs).
 pub fn cdn_plan_for_mode(
     manifest: &launcher_core::Manifest,
